@@ -45,7 +45,7 @@
       border-radius: 12px;
       box-shadow: var(--shadow);
       padding: 16px;
-      overflow-y: auto;
+      overflow: auto;
     }
 
     /* ===== Sidebar ===== */
@@ -106,6 +106,7 @@
       border-radius: 8px;
       cursor: pointer;
       font-size: 13px;
+      font-family: inherit;
       transition: all 0.15s;
     }
     .btn:hover { border-color: var(--accent); color: var(--accent); background: #eff6ff; }
@@ -118,18 +119,30 @@
     .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text-soft); }
     .btn-ghost:hover { background: var(--hover); color: var(--text); }
 
-    /* ===== Calendar ===== */
+    /* ===== Calendar: header & view toggle ===== */
     .cal-header {
       display: flex;
       align-items: center;
       gap: 8px;
       margin-bottom: 16px;
+      flex-wrap: wrap;
+    }
+    .nav-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex: 1;
+      min-width: 0;
     }
     .cal-header h1 {
-      flex: 1;
       margin: 0;
       font-size: 18px;
       font-weight: 600;
+      flex: 1;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
     .cal-header button {
       padding: 4px 10px;
@@ -139,9 +152,36 @@
       cursor: pointer;
       color: var(--text-soft);
       font-size: 14px;
+      font-family: inherit;
     }
     .cal-header button:hover { background: var(--hover); color: var(--text); }
 
+    .view-toggle {
+      display: flex;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      flex-shrink: 0;
+    }
+    .view-toggle button {
+      padding: 4px 14px;
+      background: var(--panel);
+      border: 0;
+      border-right: 1px solid var(--border);
+      color: var(--text-soft);
+      cursor: pointer;
+      font-size: 13px;
+      font-family: inherit;
+      min-width: 48px;
+    }
+    .view-toggle button:last-child { border-right: 0; }
+    .view-toggle button:hover { background: var(--hover); color: var(--text); }
+    .view-toggle button.active {
+      background: var(--accent);
+      color: #fff;
+    }
+
+    /* ===== Calendar: single month ===== */
     .weekdays {
       display: grid;
       grid-template-columns: repeat(7, 1fr);
@@ -200,16 +240,75 @@
       color: inherit;
     }
 
-    .empty-state {
+    /* ===== Calendar: multi-month (quarter / year) ===== */
+    .multi-months {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .mini-month {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 6px 6px;
+      min-width: 0;
+    }
+    .mini-month-header {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-bottom: 6px;
+    }
+    .mini-month-name {
+      font-size: 12px;
+      font-weight: 600;
+      color: var(--text);
+      text-align: center;
+      padding: 2px 0;
+    }
+    .mini-month-name .year-tag {
+      color: var(--text-faint);
+      font-weight: 400;
+      margin-left: 4px;
+      font-size: 11px;
+    }
+    .mini-weekdays {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 1px;
+      font-size: 9px;
+      color: var(--text-faint);
+      text-align: center;
+    }
+    .mini-weekdays span { padding: 1px 0; }
+    .mini-weekdays span:nth-child(1),
+    .mini-weekdays span:nth-child(7) { color: #ef4444; }
+
+    .mini-days {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 2px;
+    }
+    .mini-day {
+      aspect-ratio: 1 / 1;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 2px;
       display: flex;
       align-items: center;
       justify-content: center;
-      height: 60%;
-      color: var(--text-faint);
-      font-size: 14px;
-      text-align: center;
-      padding: 24px;
+      font-size: 9px;
+      color: var(--text-soft);
+      cursor: pointer;
+      position: relative;
+      min-width: 0;
     }
+    .mini-day.blank { background: transparent; border: 0; cursor: default; }
+    .mini-day.future { cursor: not-allowed; opacity: 0.4; }
+    .mini-day.logged { color: #fff; font-weight: 600; }
+    .mini-day.logged[data-clicks="1"] { color: var(--text); font-weight: 400; }
+    .mini-day.today { box-shadow: 0 0 0 1.5px var(--today-ring) inset; }
+    .mini-day-num { line-height: 1; }
 
     /* ===== Stats ===== */
     .stats h2 {
@@ -268,6 +367,7 @@
       border: 1px solid var(--border);
       border-radius: 6px;
       font-size: 14px;
+      font-family: inherit;
       outline: none;
     }
     .modal-content input[type="text"]:focus { border-color: var(--accent); }
@@ -293,6 +393,12 @@
       .app { grid-template-columns: 1fr; height: auto; }
       .panel { max-height: none; }
     }
+    @media (max-width: 700px) {
+      .multi-months { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 480px) {
+      .multi-months { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
@@ -305,15 +411,29 @@
 
     <main class="panel">
       <div class="cal-header">
-        <button id="prev-month" title="上个月">‹</button>
-        <h1 id="month-label"></h1>
-        <button id="next-month" title="下个月">›</button>
-        <button id="today-btn">今天</button>
+        <div class="nav-group">
+          <button id="prev-month" title="上一步">‹</button>
+          <h1 id="month-label"></h1>
+          <button id="next-month" title="下一步">›</button>
+          <button id="today-btn">今天</button>
+        </div>
+        <div class="view-toggle" id="view-toggle" role="tablist">
+          <button data-view="month"   title="月视图">月</button>
+          <button data-view="quarter" title="季度视图（3 个月）">季</button>
+          <button data-view="year"    title="年视图（12 个月）">年</button>
+        </div>
       </div>
-      <div class="weekdays">
-        <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+
+      <!-- 月视图 -->
+      <div id="single-view">
+        <div class="weekdays">
+          <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+        </div>
+        <div class="days" id="days"></div>
       </div>
-      <div class="days" id="days"></div>
+
+      <!-- 季/年视图 -->
+      <div class="multi-months" id="multi-months" style="display:none"></div>
     </main>
 
     <section class="panel stats">
@@ -351,6 +471,8 @@
       { id: 'p_default_sport', name: '运动', color: '#10b981' },
       { id: 'p_default_work',  name: '工作', color: '#f59e0b' }
     ];
+    const VIEW_STEP = { month: 1, quarter: 3, year: 12 };
+    const VIEW_COUNT = { month: 1, quarter: 3, year: 12 };
 
     // ========== State ==========
     let state = {
@@ -358,7 +480,8 @@
       currentProjectId: null,
       logs: {},          // { projectId: { "YYYY-MM-DD": 0|1|2 } }
       viewYear: null,
-      viewMonth: null
+      viewMonth: null,   // 0-11
+      viewMode: 'month'  // 'month' | 'quarter' | 'year'
     };
 
     // ========== Storage ==========
@@ -372,7 +495,6 @@
       } catch (e) {
         console.warn('loadState failed:', e);
       }
-      // 兜底默认值（顺序：先填好，再统一存）
       if (!Array.isArray(state.projects) || state.projects.length === 0) {
         state.projects = DEFAULT_PROJECTS.slice();
       }
@@ -383,6 +505,7 @@
       const now = new Date();
       if (state.viewYear == null || state.viewYear < 1900) state.viewYear = now.getFullYear();
       if (state.viewMonth == null || state.viewMonth < 0 || state.viewMonth > 11) state.viewMonth = now.getMonth();
+      if (!VIEW_STEP[state.viewMode]) state.viewMode = 'month';
       saveState();
     }
     function saveState() {
@@ -415,6 +538,11 @@
       if (clicks <= 0) delete state.logs[projectId][ds];
       else state.logs[projectId][ds] = clicks;
       saveState();
+    }
+    // 加 num 个月到 (y, m)，返回规范化 {y, m}
+    function addMonths(y, m, delta) {
+      const total = y * 12 + m + delta;
+      return { y: Math.floor(total / 12), m: ((total % 12) + 12) % 12 };
     }
 
     // ========== Render: Sidebar ==========
@@ -460,11 +588,41 @@
       });
     }
 
-    // ========== Render: Calendar ==========
-    function renderCalendar() {
-      const y = state.viewYear, m = state.viewMonth;
-      document.getElementById('month-label').textContent = `${y} 年 ${m + 1} 月`;
+    // ========== Render: Header (label + view toggle + containers) ==========
+    function renderHeader() {
+      // 视图切换按钮 active
+      document.querySelectorAll('#view-toggle button').forEach(b => {
+        b.classList.toggle('active', b.dataset.view === state.viewMode);
+      });
 
+      // label
+      let label = '';
+      if (state.viewMode === 'month') {
+        label = `${state.viewYear} 年 ${state.viewMonth + 1} 月`;
+      } else if (state.viewMode === 'quarter') {
+        const start = { y: state.viewYear, m: state.viewMonth };
+        const end = addMonths(state.viewYear, state.viewMonth, 2);
+        if (start.y === end.y) {
+          label = `${start.y} 年 ${start.m + 1}–${end.m + 1} 月`;
+        } else {
+          label = `${start.y}.${start.m + 1} – ${end.y}.${end.m + 1}`;
+        }
+      } else {
+        label = `${state.viewYear} 年`;
+      }
+      document.getElementById('month-label').textContent = label;
+
+      // 容器显隐
+      const single = document.getElementById('single-view');
+      const multi  = document.getElementById('multi-months');
+      const isSingle = state.viewMode === 'month';
+      single.style.display = isSingle ? '' : 'none';
+      multi.style.display  = isSingle ? 'none' : '';
+    }
+
+    // ========== Render: Single Month ==========
+    function renderSingleMonth() {
+      const y = state.viewYear, m = state.viewMonth;
       const firstDay = new Date(y, m, 1).getDay();
       const lastDate = new Date(y, m + 1, 0).getDate();
       const now = new Date();
@@ -513,7 +671,7 @@
         if (proj && ds <= todayKey) {
           cell.addEventListener('click', () => {
             const cur = getClicks(proj.id, ds);
-            const next = (cur + 1) % 3;  // 0 -> 1(半天) -> 2(整天) -> 0
+            const next = (cur + 1) % 3;
             setClicks(proj.id, ds, next);
             renderCalendar();
             renderStats();
@@ -521,6 +679,93 @@
         }
         daysEl.appendChild(cell);
       }
+    }
+
+    // ========== Render: Multi-Month (quarter / year) ==========
+    function buildMiniMonth(year, month) {
+      const wrap = document.createElement('div');
+      wrap.className = 'mini-month';
+
+      const firstDay = new Date(year, month, 1).getDay();
+      const lastDate = new Date(year, month + 1, 0).getDate();
+      const now = new Date();
+      const todayKey = dateStr(now.getFullYear(), now.getMonth(), now.getDate());
+      const proj = getProject(state.currentProjectId);
+
+      // header
+      const header = document.createElement('div');
+      header.className = 'mini-month-header';
+      const yearTag = (year !== state.viewYear) ? `<span class="year-tag">${year}</span>` : '';
+      header.innerHTML = `
+        <div class="mini-month-name">${month + 1}月${yearTag}</div>
+        <div class="mini-weekdays">
+          <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+        </div>
+      `;
+      wrap.appendChild(header);
+
+      // days
+      const days = document.createElement('div');
+      days.className = 'mini-days';
+      for (let i = 0; i < firstDay; i++) {
+        const b = document.createElement('div');
+        b.className = 'mini-day blank';
+        days.appendChild(b);
+      }
+      for (let d = 1; d <= lastDate; d++) {
+        const ds = dateStr(year, month, d);
+        const cell = document.createElement('div');
+        cell.className = 'mini-day';
+        cell.setAttribute('role', 'button');
+        cell.setAttribute('tabindex', '0');
+        cell.dataset.date = ds;
+        cell.setAttribute('aria-label', `${year}年${month+1}月${d}日`);
+        if (ds === todayKey) cell.classList.add('today');
+        if (ds > todayKey) cell.classList.add('future');
+
+        if (proj) {
+          const clicks = getClicks(proj.id, ds);
+          if (clicks > 0) {
+            const alpha = clicks === 1 ? 0.28 : 0.85;
+            cell.style.background = hexToRgba(proj.color, alpha);
+            cell.classList.add('logged');
+            cell.dataset.clicks = String(clicks);
+          }
+        }
+
+        const num = document.createElement('span');
+        num.className = 'mini-day-num';
+        num.textContent = d;
+        cell.appendChild(num);
+
+        if (proj && ds <= todayKey) {
+          cell.addEventListener('click', () => {
+            const cur = getClicks(proj.id, ds);
+            const next = (cur + 1) % 3;
+            setClicks(proj.id, ds, next);
+            renderCalendar();
+            renderStats();
+          });
+        }
+        days.appendChild(cell);
+      }
+      wrap.appendChild(days);
+      return wrap;
+    }
+
+    function renderMultiMonths() {
+      const count = VIEW_COUNT[state.viewMode];
+      const container = document.getElementById('multi-months');
+      container.innerHTML = '';
+      for (let i = 0; i < count; i++) {
+        const { y, m } = addMonths(state.viewYear, state.viewMonth, i);
+        container.appendChild(buildMiniMonth(y, m));
+      }
+    }
+
+    function renderCalendar() {
+      if (state.viewMode === 'month') renderSingleMonth();
+      else renderMultiMonths();
     }
 
     // ========== Render: Stats ==========
@@ -545,16 +790,30 @@
       titleEl.innerHTML = `<span class="dot" style="background:${proj.color}"></span>${escapeHtml(proj.name)}`;
 
       const all = sumLogs(state.logs[proj.id] || {});
-      const monthPrefix = `${state.viewYear}-${pad2(state.viewMonth + 1)}`;
-      const monthLogs = {};
-      Object.entries(state.logs[proj.id] || {}).forEach(([k, v]) => {
-        if (k.startsWith(monthPrefix)) monthLogs[k] = v;
-      });
+      let monthLogs = {};
+      if (state.viewMode === 'month') {
+        const monthPrefix = `${state.viewYear}-${pad2(state.viewMonth + 1)}`;
+        Object.entries(state.logs[proj.id] || {}).forEach(([k, v]) => {
+          if (k.startsWith(monthPrefix)) monthLogs[k] = v;
+        });
+      } else {
+        // 季/年视图：显示当前视图窗口内的统计
+        const count = VIEW_COUNT[state.viewMode];
+        for (let i = 0; i < count; i++) {
+          const { y, m } = addMonths(state.viewYear, state.viewMonth, i);
+          const prefix = `${y}-${pad2(m + 1)}`;
+          Object.entries(state.logs[proj.id] || {}).forEach(([k, v]) => {
+            if (k.startsWith(prefix)) monthLogs[k] = v;
+          });
+        }
+      }
       const m = sumLogs(monthLogs);
 
+      const monthLabel = state.viewMode === 'month' ? '本月' :
+                         state.viewMode === 'quarter' ? '本季度' : '本年';
       body.innerHTML = `
         <div class="stat-card">
-          <div class="stat-label">本月</div>
+          <div class="stat-label">${monthLabel}</div>
           <div class="stat-value">${m.total}<span class="unit">天</span></div>
           <div class="stat-sub">${m.days} 整天 · ${m.half} 半天</div>
         </div>
@@ -573,6 +832,7 @@
 
     function renderAll() {
       renderProjects();
+      renderHeader();
       renderCalendar();
       renderStats();
     }
@@ -600,14 +860,13 @@
     }
 
     // ========== Wire up ==========
-    function shiftMonth(delta) {
-      let m = state.viewMonth + delta;
-      let y = state.viewYear;
-      if (m < 0)  { m = 11; y--; }
-      if (m > 11) { m = 0;  y++; }
-      state.viewMonth = m;
-      state.viewYear = y;
+    function shiftView(delta) {
+      const step = VIEW_STEP[state.viewMode];
+      const r = addMonths(state.viewYear, state.viewMonth, delta * step);
+      state.viewYear = r.y;
+      state.viewMonth = r.m;
       saveState();
+      renderHeader();
       renderCalendar();
       renderStats();
     }
@@ -616,8 +875,15 @@
       state.viewYear = t.getFullYear();
       state.viewMonth = t.getMonth();
       saveState();
+      renderHeader();
       renderCalendar();
       renderStats();
+    }
+    function setViewMode(mode) {
+      if (!VIEW_STEP[mode] || state.viewMode === mode) return;
+      state.viewMode = mode;
+      saveState();
+      renderAll();
     }
     function openModal() {
       document.getElementById('project-name').value = '';
@@ -649,9 +915,13 @@
       renderColorPicker();
       renderAll();
 
-      document.getElementById('prev-month').addEventListener('click', () => shiftMonth(-1));
-      document.getElementById('next-month').addEventListener('click', () => shiftMonth(1));
+      document.getElementById('prev-month').addEventListener('click', () => shiftView(-1));
+      document.getElementById('next-month').addEventListener('click', () => shiftView(1));
       document.getElementById('today-btn').addEventListener('click', goToday);
+      document.getElementById('view-toggle').addEventListener('click', (e) => {
+        const btn = e.target.closest('button[data-view]');
+        if (btn) setViewMode(btn.dataset.view);
+      });
       document.getElementById('add-project').addEventListener('click', openModal);
       document.getElementById('cancel-project').addEventListener('click', closeModal);
       document.getElementById('confirm-project').addEventListener('click', confirmProject);
