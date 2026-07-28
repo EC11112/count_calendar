@@ -1,5 +1,51 @@
 # Changelog
 
+## v0.3.2 — 2026-07-28
+
+**间距全面收紧 + 屏占比改回 v0.3.0 思路 + 标签改名 + 竖屏隐藏屏占比**
+
+v0.3.1 / v0.3.2 这一波全是 3 panel 布局的细节调优：sidebar / main / stats 紧贴屏幕两侧、紧凑排布、main 内部不留多余空白。
+
+**1. 屏占比反向限制 main panel 居中（v0.3.1 改坏，v0.3.2 重做）：**
+- v0.3.1 改 `.app` 的 `grid-template-columns: 240px mainWpx 280px`，3 panel 总宽 < .app 宽，**多余空间堆在 stats 右边**。用户反馈"项目/详情离日历非常远"、"对整个 body 都施加了屏占比限制"。
+- v0.3.2 重做：**保持 `.app` grid 默认 `240px 1fr 280px` 不动**，只给 main panel 加 `max-width: mainW; margin: 0 auto`。
+  - 1fr 列 = `frWidth`（= .app 宽 - sidebar 240 - stats 280 - 2 gap 8 - 2 padding 8，**自动撑满**）
+  - main panel `max-width: mainW` + `margin: 0 auto` → 在 1fr 列内**居中**缩小
+  - 1fr 列内 main panel 左右的空白属于 .app 背景（不是 stats 旁的"未用空间"）
+  - sidebar / stats 始终紧贴 .app 边缘（grid 1fr 行为不变）
+- 实测 4k 屏 75% 屏占比：sidebar 贴左、stats 贴右、main 居中 2442 宽，左右各 411 空白。
+
+**2. 间距全面收紧：**
+- `.app` gap 16 → **8**（panel 之间从 16px 减半到 8px）
+- `.app` padding 0 → **8**（v0.3.1 改 0 让 panel 贴死屏幕边缘"很难看"，现在 8px 呼吸）
+- `.cal-header` margin-bottom 16 → **8**：main panel 顶部 header 块（`<< 标题 >> 今天 月季年 ⚙`）之前 margin-bottom 16 跟 sidebar / stats 不对齐，main 顶部比两侧多 16+16+16=48px"标签占位"。改 8 后 3 panel 顶部对齐。
+- `.panel` padding 16 → **14**（配合 gap 8 整体收紧）
+
+**3. 「最大列数」→ 「星期数」（更准确）：**
+- 配置项存的是"几个 7 列"，所以"星期数"比"最大列数"语义更直接。
+- 提示文字保持 "列数 21-28（cellSize 41-49px）效果最佳"。
+
+**4. 竖屏时屏占比配置隐藏 + 强制 100%：**
+- 竖屏下 main panel 本来就窄，屏占比再缩就崩。
+- CSS `@media (orientation: portrait) { .screen-ratio-row { display: none; } }` 隐藏设置行
+- JS `applyScreenRatio` 用 `matchMedia('(orientation: portrait)')` 判断，竖屏时强制 ratio=1.0
+- 切横屏自动恢复（监听 `orientationchange`）
+
+**5. 窄窗口屏占比失效保护（保留自 v0.3.1）：**
+- `if (frWidth < 1024)` 时屏占比失效，强制 100%。避免 800px 窗口 + 屏占比 75% → mainW=168px 季/年视图被压垮。
+
+**6. 极小屏 main panel `min-width: 0`（保留自 v0.3.1）：**
+- `main.panel { min-width: 0; }` 防止 .app grid 1fr 被季/年视图的 14-21 列 grid 内容撑大。
+
+**保持不变：**
+- 数据结构、storage key `count_calendar_v2`、点击循环、统计、a11y。
+- 季/年视图的跨月不跳星期、周末红色。
+- 4k 解锁（v0.2.5 已删 `.app { max-width }`）。
+- strip 字号算法（v0.3.0 的 0.5/0.4）、徽章阈值（v0.3.0 的 cellSize >= 56）。
+- 月视图字号 CSS 写死（v0.3.0 的 14/14/10）。
+
+---
+
 ## v0.3.1 — 2026-07-28
 
 **屏占比反向限制 main.panel + 日期格子和星期几严格对齐 + 选项框宽度一致**
