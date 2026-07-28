@@ -228,6 +228,34 @@
       outline: none;
     }
     .settings-row input[type="number"]:focus { border-color: var(--accent); }
+    .settings-row select {
+      width: 90px;
+      padding: 4px 8px;
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      font-size: 13px;
+      font-family: inherit;
+      background: #fff;
+      cursor: pointer;
+      outline: none;
+    }
+    .settings-row select:focus { border-color: var(--accent); }
+    /* 行内的悬浮小注释（紧跟 label/title） */
+    .settings-inline-hint {
+      display: inline-block;
+      margin-left: 4px;
+      width: 14px;
+      height: 14px;
+      line-height: 14px;
+      text-align: center;
+      border-radius: 50%;
+      background: var(--hover);
+      color: var(--text-soft);
+      font-size: 10px;
+      cursor: help;
+      user-select: none;
+    }
+    .settings-inline-hint:hover { background: var(--accent); color: #fff; }
     .settings-hint {
       margin: 8px 0 0;
       font-size: 11px;
@@ -244,7 +272,8 @@
     }
     .weekdays span {
       text-align: center;
-      /* font-size 由 JS 动态算（cellSize * 0.7，cap 40px） */
+      /* 月视图字号固定，不参与 strip 动态字号算法（v0.3.0 拆开） */
+      font-size: 14px;
       color: var(--text-faint);
       padding: 6px 0;
       font-weight: 500;
@@ -266,7 +295,8 @@
       align-items: flex-start;
       justify-content: flex-end;
       padding: 6px 8px;
-      /* font-size 由 JS 动态算（cellSize * 0.7） */
+      /* 月视图字号固定 14px，不参与 strip 动态字号算法（v0.3.0 拆开） */
+      font-size: 14px;
       color: var(--text-soft);
       cursor: pointer;
       transition: transform 0.1s, box-shadow 0.1s;
@@ -287,7 +317,8 @@
       position: absolute;
       bottom: 4px;
       left: 4px;
-      /* font-size 由 JS 动态算（cellSize * 0.5） */
+      /* 月视图 badge 字号固定 10px，不参与 strip 动态字号算法 */
+      font-size: 10px;
       padding: 1px 4px;
       border-radius: 4px;
       background: rgba(255,255,255,0.35);
@@ -299,6 +330,8 @@
       display: flex;
       flex-direction: column;
       gap: 18px;
+      /* 屏占比由 JS 内联 max-width 控制（state.screenRatio * panel width） */
+      margin: 0 auto;
     }
     .weekday-row {
       display: grid;
@@ -307,6 +340,11 @@
       color: var(--text-soft);
       text-align: center;
       margin-bottom: 3px;
+      /* 屏占比 < 1 时：让 grid 只占实际需要的宽度（cols*cellSize），居中显示 */
+      width: fit-content;
+      max-width: 100%;
+      margin-left: auto;
+      margin-right: auto;
     }
     .weekday-row span { padding: 1px 0; }
     .weekday-row span.wkn { color: #ef4444; }
@@ -315,6 +353,10 @@
       display: grid;
       /* grid-template-columns 和 font-size 由 JS 根据视口动态算 */
       gap: 2px;
+      width: fit-content;
+      max-width: 100%;
+      margin-left: auto;
+      margin-right: auto;
     }
     .strip-day {
       /* 正方形：宽 = 网格列宽 = 网格列宽，aspect-ratio 强制高 = 宽 */
@@ -480,6 +522,19 @@
               <span>最大列数</span>
               <input type="number" id="max-cols-input" min="7" max="49" step="7">
             </label>
+            <label class="settings-row">
+              <span>
+                屏占比
+                <span class="settings-inline-hint" title="横屏占比：4k/2k 大屏拉到 100% 容易显得太满，降到 75%–83% 更舒服；平板/手机全屏场景可以保持 100%">?</span>
+              </span>
+              <select id="screen-ratio-input">
+                <option value="1">100%</option>
+                <option value="0.83">83%</option>
+                <option value="0.75">75%</option>
+                <option value="0.66">66%</option>
+                <option value="0.5">50%</option>
+              </select>
+            </label>
             <p class="settings-hint">7 的倍数，41–49 之间效果最佳</p>
           </div>
         </div>
@@ -543,31 +598,44 @@
     //  3) 格子像素必须 >= 41（1080*0.8/21 的舒适下限）
     //  4) 在保证 (3) 的前提下尽量多列填满屏幕
     // 算法：从 MAX 往下试 7 的倍数，第一个 cellSize >= 41 的列数即为最优
-    // MAX_STRIP_COLS 默认 35（≈ 49 * 3/4），可由用户在右上角设置菜单里调
+    // MAX_STRIP_COLS 默认 35（≈ 49 * 3/4，即 3/4 个完整星期数），可由用户在右上角设置菜单里调
     const DEFAULT_MAX_STRIP_COLS = 35;
     const MIN_CELL_SIZE     = 41;        // 1080 * 0.8 / 21 ≈ 41，下限
     const STRIP_GAP         = 2;
     const MIN_STRIP_COLS    = 7;
-    const BADGE_THRESHOLD   = 35;        // cellSize >= 35 时切月视图样式
-    // 统一字体：格子内所有文本（weekday、date）按 cellSize * 0.7 缩放
-    const LABEL_FONT_RATIO  = 0.7;       // weekday / date 数字 / 月份标签
-    const BADGE_FONT_RATIO  = 0.5;       // "半" / "整" 徽章
-    const MIN_LABEL_FONT    = 20;        // 28px cell → 19.6，夹 20
-    const MAX_LABEL_FONT    = 40;        // 2k+ 大屏别无限放大
+    // 字体算法（v0.3.0 调小）：
+    //  - 0.7/0.5 那版数字太大、看着像加粗（浏览器在 font-size 接近格子边长时抗锯齿退化）
+    //  - 改 0.5/0.4 配合 cap 28/18，cell=41 时 label≈20/21，cell=80 时 label≈28（cap）
+    //  - 月视图不参与这套，CSS 写死 14/14/10
+    const LABEL_FONT_RATIO  = 0.5;       // weekday / date 数字 / 月份标签
+    const BADGE_FONT_RATIO  = 0.4;       // "半" / "整" 徽章
+    const MIN_LABEL_FONT    = 14;        // cell=28 兜底字（不被 min cell 触发）
+    const MAX_LABEL_FONT    = 28;        // 2k+ 大屏 cap，避免再像加粗
     const MIN_BADGE_FONT    = 9;
-    const MAX_BADGE_FONT    = 24;
+    const MAX_BADGE_FONT    = 18;
+    // 徽章渲染阈值（v0.3.0 改公式）：
+    //  - 旧值 35 在 1080p 半屏竖屏触发，但小格里 "半" 跟日期数字会重叠
+    //  - 用户公式 cellSize > 字体px * 4：参考最小字号 14 * 4 = 56，作为"能放下 4 个字"的最小宽度
+    //  - 56 也正好是 1080p 全屏能舒服触发的下限，4k 大屏远超
+    const REF_FONT_FOR_BADGE = 14;       // 参考最小字号
+    const BADGE_MIN_CELLSIZE = REF_FONT_FOR_BADGE * 4;  // = 56
+    function shouldShowBadge(cellSize) { return cellSize >= BADGE_MIN_CELLSIZE; }
 
     function calculateStripLayout(containerWidth) {
+      // v0.3.0：先按 state.screenRatio 收一收 effectiveWidth
+      // 屏占比 = 横向用多少比例填充 panel（比如 1.0 全填、0.75 居中留白）
+      const ratio = state.screenRatio || 1.0;
+      const effectiveWidth = Math.floor(containerWidth * ratio);
       const maxCols = state.maxStripCols || DEFAULT_MAX_STRIP_COLS;
       const top = Math.max(MIN_STRIP_COLS, Math.min(maxCols, 49) - (maxCols - 1) % 7 - 1 + 1);
       // 把 maxCols 向下取整到 7 的倍数
       const maxAligned = Math.floor(maxCols / 7) * 7;
       for (let cols = maxAligned; cols >= MIN_STRIP_COLS; cols -= 7) {
-        const cellSize = Math.floor((containerWidth - STRIP_GAP * (cols - 1)) / cols);
+        const cellSize = Math.floor((effectiveWidth - STRIP_GAP * (cols - 1)) / cols);
         if (cellSize >= MIN_CELL_SIZE) return { cols, cellSize };
       }
       // 极窄屏兜底：用 7 列、cell 尽可能大（允许 < 41）
-      const fallback = Math.floor((containerWidth - STRIP_GAP * (MIN_STRIP_COLS - 1)) / MIN_STRIP_COLS);
+      const fallback = Math.floor((effectiveWidth - STRIP_GAP * (MIN_STRIP_COLS - 1)) / MIN_STRIP_COLS);
       return { cols: MIN_STRIP_COLS, cellSize: Math.max(fallback, 20) };
     }
     function calcLabelFontSize(cellSize) {
@@ -597,8 +665,23 @@
       viewYear: null,
       viewMonth: null,
       viewMode: 'month',
-      maxStripCols: DEFAULT_MAX_STRIP_COLS
+      maxStripCols: DEFAULT_MAX_STRIP_COLS,
+      // v0.3.0：横屏屏占比（1.0 全填，0.75 居中 75% 宽），大屏不要太夸张
+      screenRatio: 1.0
     };
+
+    // 屏占比合法档位（5 档：100/83/75/66/50）
+    const SCREEN_RATIO_OPTIONS = [1.0, 0.83, 0.75, 0.66, 0.5];
+    function normalizeScreenRatio(v) {
+      // 找最近的合法档位
+      let best = SCREEN_RATIO_OPTIONS[0];
+      let bestDelta = Math.abs(v - best);
+      for (const opt of SCREEN_RATIO_OPTIONS) {
+        const d = Math.abs(v - opt);
+        if (d < bestDelta) { best = opt; bestDelta = d; }
+      }
+      return best;
+    }
 
     // ========== Storage ==========
     function loadState() {
@@ -627,6 +710,12 @@
         state.maxStripCols = DEFAULT_MAX_STRIP_COLS;
       } else {
         state.maxStripCols = Math.min(49, Math.floor(state.maxStripCols / 7) * 7);
+      }
+      // screenRatio 必须落在合法档位里
+      if (typeof state.screenRatio !== 'number' || state.screenRatio <= 0) {
+        state.screenRatio = 1.0;
+      } else {
+        state.screenRatio = normalizeScreenRatio(state.screenRatio);
       }
       saveState();
     }
@@ -753,19 +842,18 @@
       const todayKey = dateStr(now.getFullYear(), now.getMonth(), now.getDate());
       const proj = getProject(state.currentProjectId);
 
-      // 算月视图格子大小（固定 7 列，gap 6）
+      // 算月视图格子大小（固定 7 列，gap 6）—— 仅用于布局，字号 CSS 写死
       const MONTH_GAP = 6;
       const monthContainer = measureMonthWidth();
       const cellSize = Math.max(28, Math.floor((monthContainer - MONTH_GAP * 6) / 7));
-      const labelFont = calcLabelFontSize(cellSize);
-      const badgeFont = calcBadgeFontSize(cellSize);
 
+      // v0.3.0：月视图字号 CSS 写死 14/14/10，不参与 strip 动态字号算法
       const weekdays = document.querySelector('.weekdays');
-      weekdays.style.fontSize = `${labelFont}px`;
+      weekdays.style.fontSize = '';  // 清掉 v0.2.5 设的内联字号，让 CSS 接管
 
       const daysEl = document.getElementById('days');
       daysEl.innerHTML = '';
-      daysEl.style.fontSize = `${labelFont}px`;
+      daysEl.style.fontSize = '';   // 同上
 
       for (let i = 0; i < firstDay; i++) {
         const blank = document.createElement('div');
@@ -794,7 +882,7 @@
             const badge = document.createElement('span');
             badge.className = 'badge';
             badge.textContent = clicks === 1 ? '半' : '整';
-            badge.style.fontSize = `${badgeFont}px`;
+            // 月视图 badge 字号由 CSS 写死（10px），不再内联设置
             cell.appendChild(badge);
           }
         }
@@ -859,7 +947,9 @@
       const gridStyle = `repeat(${data.cols}, ${cellSize}px)`;
       const labelFont = calcLabelFontSize(cellSize);
       const badgeFont = calcBadgeFontSize(cellSize);
-      const useBadgeStyle = cellSize >= BADGE_THRESHOLD;
+      // v0.3.0：徽章渲染条件改为"能放下 4 个参考字号宽（≥ 56px）"，
+      // 避免小格里"半"跟日期数字重叠
+      const useBadgeStyle = shouldShowBadge(cellSize);
 
       // weekday row
       const wdRow = document.createElement('div');
@@ -937,7 +1027,7 @@
         }
       }
 
-      // 大格子（cellSize >= 35）：切月视图样式（日期右上角、徽章左下角）
+      // 大格子（cellSize >= 56，见 shouldShowBadge）：切月视图样式（日期右上角、徽章左下角）
       if (useBadgeStyle) cell.classList.add('with-badge');
 
       const num = document.createElement('span');
@@ -1152,7 +1242,10 @@
       const settingsBtn = document.getElementById('settings-btn');
       const settingsMenu = document.getElementById('settings-menu');
       const maxColsInput = document.getElementById('max-cols-input');
+      const screenRatioInput = document.getElementById('screen-ratio-input');
       maxColsInput.value = state.maxStripCols;
+      // select 的 value 是字符串，要精确匹配（normalizeScreenRatio 已经吸附）
+      screenRatioInput.value = String(state.screenRatio);
       settingsBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         settingsMenu.classList.toggle('hidden');
@@ -1170,6 +1263,15 @@
         v = Math.floor(v / 7) * 7;
         maxColsInput.value = v;
         state.maxStripCols = v;
+        saveState();
+        if (state.viewMode !== 'month') renderCalendar();
+      });
+      screenRatioInput.addEventListener('change', () => {
+        // select 的 5 档都是合法值，直接 parseFloat
+        const raw = parseFloat(screenRatioInput.value);
+        const v = normalizeScreenRatio(raw);
+        screenRatioInput.value = String(v);
+        state.screenRatio = v;
         saveState();
         if (state.viewMode !== 'month') renderCalendar();
       });

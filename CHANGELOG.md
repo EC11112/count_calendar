@@ -1,5 +1,58 @@
 # Changelog
 
+## v0.3.0 — 2026-07-28
+
+**字体算法拆分 + 屏占比设置 + 徽章阈值改公式**
+
+四个收尾项，都跟 v0.2.5 的"统一字号"路线对齐：把"全局一套"改成"按视图分治 + 用户可调"。
+
+**1. 月视图独立，不参与全局字号算法：**
+- v0.2.5 让月视图也吃 `calcLabelFontSize`，结果月视图在 1080p 半屏下被 cellSize * 0.7 算成 28-42px，配合 badge 一起在月视图本来就够大的格子里"再加粗"。
+- 现在月视图字号 CSS 写死：`.weekdays span` 14px / `.day` 14px / `.day .badge` 10px。回到 v0.2.4 之前的月视图原貌。
+- 后续如果 strip 字号算法成熟再统一，这块留着不阻塞 strip。
+
+**2. strip 字号算法调小（去掉伪加粗感）：**
+- `LABEL_FONT_RATIO`: 0.7 → **0.5**
+- `BADGE_FONT_RATIO`: 0.5 → **0.4**
+- `MIN_LABEL_FONT`: 20 → **14**
+- `MAX_LABEL_FONT`: 40 → **28**（2k+ 大屏 cap 收紧，避免再"看着像加粗"）
+- `MAX_BADGE_FONT`: 24 → **18**
+- 根因：font-size 接近格子边长时浏览器抗锯齿退化、字看着像 bold。现在 cellSize=41 → 字号 20（之前 28），cellSize=80 → 字号 28（cap）。
+
+**3. 徽章渲染阈值改公式（避免小格重叠）：**
+- v0.2.5 的 `BADGE_THRESHOLD = 35` 太小，1080p 半屏竖屏触发后"半"跟日期数字在 41px 格子里确实会挤。
+- 改 `shouldShowBadge(cellSize) = cellSize >= BADGE_MIN_CELLSIZE`，其中 `BADGE_MIN_CELLSIZE = REF_FONT_FOR_BADGE * 4 = 14 * 4 = 56`。
+- 解读：cellSize 要能放下 4 个参考最小字号（14px）的字符宽度，才切月视图样式（数字右上 + 徽章左下）。小格保持居中、只显示浅色底。
+- 实测阈值：1080p 半屏竖屏（cellSize ≈ 41）→ 不触发；1080p 全屏（60-80）→ 触发；4k 屏（80-150）→ 触发。
+
+**4. 新增「屏占比」设置（横屏占比）：**
+- 大屏拉到 100% 太满：年视图 14 列 cellSize 只到 41，看着密密麻麻。
+- 新增 `state.screenRatio`（默认 1.0），5 档：100% / 83% / 75% / 66% / 50%。
+- `calculateStripLayout` 在算 cellSize 前先 `effectiveWidth = panel * screenRatio`，让 grid 居中显示。
+- 屏占比生效时 strip 内的 `.weekday-row` / `.day-strip` 改成 `width: fit-content; margin: 0 auto`，grid 不会占满 panel。
+- 设置菜单第二行加 `<select>`，旁边跟一个 `?` 圆圈 hover 显示悬浮注释：「横屏占比：4k/2k 大屏拉到 100% 容易显得太满，降到 75%–83% 更舒服；平板/手机全屏场景可以保持 100%」。
+- 持久化到 `state.screenRatio`，进 localStorage（`count_calendar_v2`），跟 `maxStripCols` 平级。
+
+**5. strip 容器支持居中（屏占比生效需要）：**
+- `.strip-wrap` 加 `margin: 0 auto`。
+- `.weekday-row` / `.day-strip` 改 `width: fit-content; max-width: 100%; margin-left/right: auto`。grid 容器只占实际需要的宽度（cols × cellSize + gaps），居中显示。
+
+**6. 3/4 列 → 3/4 星期（注释澄清）：**
+- 之前 v0.2.5 注释"MAX_STRIP_COLS 默认 35（≈ 49 * 3/4）"里的 3/4 指的是"3/4 个完整星期数"（0.75 * 7 ≈ 5.25，向下取整到 7 的倍数就是 35 = 5 周）。本版本注释改成"3/4 个完整星期数"，避免歧义。
+
+**实现细节：**
+- 月视图 `renderSingleMonth` 不再设 `weekdays.style.fontSize` / `daysEl.style.fontSize` / `badge.style.fontSize`，清空内联让 CSS 接管。
+- 屏占比档位是离散 5 档，`SCREEN_RATIO_OPTIONS = [1.0, 0.83, 0.75, 0.66, 0.5]`，`normalizeScreenRatio` 做最邻近吸附。
+- `loadState` 验证 `screenRatio` 是合法档位，非法/缺失都回到 1.0。
+
+**保持不变：**
+- 数据结构、storage key `count_calendar_v2`、点击循环、统计、a11y。
+- 季/年视图的跨月不跳星期、周末红色。
+- 4k 解锁（v0.2.5 已删 `.app { max-width }`）。
+- 季/年视图的算法骨架（从 MAX 往下试 7 的倍数、cellSize ≥ 41）。
+
+---
+
 ## v0.2.5 — 2026-07-28
 
 **字体统一 + 大格子切月视图样式 + 4k 解锁 + 设置菜单**
