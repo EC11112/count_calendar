@@ -498,15 +498,15 @@
     <main class="panel">
       <div class="cal-header">
         <div class="nav-group">
-          <button id="prev-month" title="上一步">‹</button>
+          <button id="prev-month" title="上一段">‹</button>
           <h1 id="month-label"></h1>
-          <button id="next-month" title="下一步">›</button>
-          <button id="today-btn">今天</button>
+          <button id="next-month" title="下一段">›</button>
+          <button id="today-btn" title="跳到今天">今天</button>
         </div>
         <div class="view-toggle" id="view-toggle" role="tablist">
-          <button data-view="month"   title="月视图">月</button>
-          <button data-view="quarter" title="季度视图（3 个月）">季</button>
-          <button data-view="year"    title="年视图（12 个月）">年</button>
+          <button data-view="month"   title="月视图（单月，7 列）">月</button>
+          <button data-view="quarter" title="季度视图（连续 3 个月，列数 = 星期数 × 7）">季</button>
+          <button data-view="year"    title="年视图（连续 12 个月，列数 = 星期数 × 7）">年</button>
         </div>
         <div class="header-actions">
           <button id="settings-btn" class="header-icon-btn" title="设置" aria-label="设置">⚙</button>
@@ -514,36 +514,36 @@
             <label class="settings-row">
               <span>
                 星期数
-                <span class="settings-inline-hint" title="季/年视图最多几个星期一行（1 星期 = 7 列）。例：5 = 5 周 = 35 列">?</span>
+                <span class="settings-inline-hint" title="季/年视图每行几周（1 周 = 7 列）。月视图固定 1 周不生效。范围 1-7，默认 5。">?</span>
               </span>
               <input type="number" id="max-cols-input" min="1" max="7" step="1">
             </label>
             <label class="settings-row">
               <span>
                 方块大小上限
-                <span class="settings-inline-hint" title="所有视图（月/季/年）日期块的最大边长（px）。4k 大屏下防止格子过大，季/年视图也会按这个值截断 cellSize。范围 40-200">?</span>
+                <span class="settings-inline-hint" title="日期格子最大边长（px）。所有视图通用 cap，大屏防格子过大。范围 40-200，默认 80。">?</span>
               </span>
               <input type="number" id="max-cell-input" min="40" max="200" step="4">
             </label>
             <label class="settings-row screen-ratio-row">
               <span>
                 全屏
-                <span class="settings-inline-hint" title="开：UI 占满 viewport 宽度（留 16px 边距）。关：UI 宽度由滑条 / cellSize × 星期数 × 7 决定，4k 大屏下会缩到中间。">?</span>
+                <span class="settings-inline-hint" title="开：日历撑满视口宽度（留 16px 边距）。关：由下方「日历宽度」滑条控制。竖屏强制开。">?</span>
               </span>
               <input type="checkbox" id="fullscreen-input">
             </label>
             <!-- v0.3.4+：滑条调控日历面板 mainW，全屏开时灰色禁用
-                 min = 7 * 方块上限 * 1.1（一周大小 + 10% 余量）
-                 max = viewport * 0.7
-                 默认 = 当前视图的 cellUiW mainW -->
+                 min = 7 × 方块上限 × 1.1（一周大小 + 10% 余量）
+                 max = 视口 × 0.7
+                 默认 = 当前视图的 cellUiW mainW（用户没拖过就一直自动算） -->
             <label class="settings-row screen-ratio-row">
               <span>
                 日历宽度
-                <span class="settings-inline-hint" title="非全屏时手动调节 main panel 宽度（7 × 方块上限 × 1.1 ~ 视口 × 70%）。全屏开时该选项无效。">?</span>
+                <span class="settings-inline-hint" title="非全屏时手动调节日历面板宽度（1 周大小 ~ 视口 70%）。全屏开时该选项无效。">?</span>
               </span>
               <input type="range" id="cal-width-input" min="0" max="0" step="10">
             </label>
-            <p class="settings-hint">列数 21–28（cellSize 41–49px）效果最佳</p>
+            <p class="settings-hint">日期格子永远正方形；方块上限 = 最大 cellSize，实际按面板宽度算。</p>
           </div>
         </div>
       </div>
@@ -1227,6 +1227,19 @@
     }
 
     // ========== Wire up ==========
+    // v0.3.4+：更新导航按钮 title（按当前视图显示实际步长）
+    // - 月视图：上一月/下一月
+    // - 季视图：上一季(3个月)/下一季
+    // - 年视图：上一年/下一年
+    function updateNavTitles() {
+      const step = VIEW_STEP[state.viewMode];
+      let label;
+      if (state.viewMode === 'month') label = '月';
+      else if (state.viewMode === 'quarter') label = '季（3 个月）';
+      else label = '年';
+      document.getElementById('prev-month').title = `上一${label}`;
+      document.getElementById('next-month').title = `下一${label}`;
+    }
     function shiftView(delta) {
       const step = VIEW_STEP[state.viewMode];
       const r = addMonths(state.viewYear, state.viewMonth, delta * step);
@@ -1265,6 +1278,8 @@
       saveState();
       // 视图变了 → mainCols 变了（季/年走 maxStripCols，月走 7）→ 滑条 autoMainW 变了
       syncCalWidthSlider();
+      // 视图变了 → 导航按钮的步长也变了（1月 / 3月 / 12月）→ 更新 title
+      updateNavTitles();
       renderAll();
     }
     function openModal() {
@@ -1364,6 +1379,8 @@
       // v0.3.4+：滑条 sync 助手 —— 任何 state 变了都调一下同步 min/max/value/disabled
       // （syncCalWidthSlider 已经在 applyScreenRatio 之后定义成顶层函数）
       syncCalWidthSlider();
+      // v0.3.4+：导航按钮 title 同步当前视图（上一月/上一季/上一年）
+      updateNavTitles();
       settingsBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         toggleSettingsMenu();
