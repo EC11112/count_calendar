@@ -1,5 +1,36 @@
 # Changelog
 
+## v0.2.3 — 2026-07-28
+
+**季/年视图改造 + 今天按钮锚定**
+
+三个收尾项。
+
+**季视图去掉块名：**
+- 原来季组件顶部还会显示「`7–9 月`」一行小字，和顶部 label「`2026 年 7–9 月`」重复。本版本拿掉。顶部 label 是单一来源。
+
+**年视图独立实现（不再拼接季度组件）：**
+- 旧年视图是「3 个 mini 季组件上下堆叠」，每个块还带自己的月份范围标题。看起来就像 3 个季视图拼起来。
+- 新年视图是独立的 `renderYear()`：1 块，12 个月连续流，一周一行（7 列），整年 ≈ 53 行；只 1/1 加前缀空对齐周四，后续月份无缝接续。
+- 视觉上加了 `.day-strip.year-strip` 紧凑样式：格子固定 20px 高、10px 字、gap 1px，53 行不爆高度。
+- 季视图和年视图是两个独立函数（`renderQuarter` / `renderYear`），都通过 `buildStripData` + `renderStripEl` 共享同一套数据构造 + DOM 渲染逻辑，但入口分开，以后想各自演化不会牵动对方。
+
+**今天按钮锚定到本季 / 本年：**
+- 之前 `goToday` 不管 viewMode 都把 `viewMonth` 设成「今天的月份」。在年视图里这会导致 viewMonth=6 → 显示 7月2026-6月2027 整整错位一年；季视图里如果今天是 5 月，会落在「5-7月」这个奇怪的 3 月窗口里而不是 Q2。
+- 现在按 viewMode 走：
+  - `month` → `viewMonth = 今天`
+  - `quarter` → `viewMonth = floor(今天月/3) * 3`（季首）
+  - `year` → `viewMonth = 0`（年初）
+- viewYear 仍然取今年（`t.getFullYear()`），所以从 2027 视图点今天会回到 2026 1-12 月。
+
+**清理：**
+- 删掉无用的 `WEEKS_PER_ROW` 常量、`buildStripBlock` 函数、`.strip-block-name` / `.strip-block-name .year-tag` CSS。
+
+**保持不变：**
+- 数据结构、storage key `count_calendar_v2`、点击循环、统计、a11y、季/年视图本身的跨月不跳星期。
+
+---
+
 ## v0.2.2 — 2026-07-28
 
 **修复季/年视图「跳星期」+ 清理 UI 噪音**
