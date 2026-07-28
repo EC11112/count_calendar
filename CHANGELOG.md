@@ -1,5 +1,49 @@
 # Changelog
 
+## v0.2.5 — 2026-07-28
+
+**字体统一 + 大格子切月视图样式 + 4k 解锁 + 设置菜单**
+
+四个收尾项。
+
+**1. 统一月/季/年日历的格子内字体：**
+- `calcLabelFontSize(cellSize) = min(40, max(20, cellSize * 0.7))` — weekday 标签和 date 数字统一这个公式
+- `calcBadgeFontSize(cellSize) = min(24, max(9, cellSize * 0.5))` — "半"/"整" 徽章
+- 41px 最小格子 → 28.7px 字体（≈ 格子下限 * 0.7）；80px 格子 → 40px（cap）
+- 月视图的 `.weekdays span` / `.day` / `.day .badge` 也改成内联设置，去掉 CSS 里的固定 12px/13px/10px
+
+**2. 大格子切月视图样式（cellSize ≥ 35）：**
+- 日期在右上角（`position: absolute; top: 2px; right: 4px;`），不再是居中
+- "半" / "整" 徽章在左下角（`position: absolute; bottom: 2px; left: 4px;`）
+- 小格子（cellSize < 35）保持居中渲染
+- 阈值 `BADGE_THRESHOLD = 35` 约对应 4-5 个 10px 字符宽度，用户说"4.5个字你按合适的来"
+
+**3. 解除 `.app` 的 `max-width: 1400px`：**
+- 之前这个限制让 4k 屏下 main panel 只能分到 ~816px → 算法只能选 14 列
+- 去掉之后 4k 屏 main panel ~3256px → 4k 屏能跑到默认上限 35 列
+- 2k+ 大屏也终于能用上自适应带来的多列体验
+
+**4. 右上角新增设置按钮（⚙）：**
+- 点击弹出菜单，含「最大列数」输入框（7 的倍数，范围 7-49）
+- 默认 35（≈ 49 * 3/4），用户可调
+- 存在 `state.maxStripCols`，进 localStorage（`count_calendar_v2`）
+- 改完自动 re-render
+- 提示文字「7 的倍数，41-49 之间效果最佳」
+
+**实现细节：**
+- `calculateStripLayout` 改用 `state.maxStripCols`（默认 35）作上限
+- `buildStripCell` 接 `cellSize` 参数，自动判断 `useBadgeStyle` 并加 `.with-badge` class
+- `renderStripEl` 算 `labelFont` / `badgeFont` 传给 cell
+- `renderSingleMonth` 同样算 cellSize + labelFont + badgeFont
+- resize 监听涵盖月视图（之前只 re-render 季/年）
+
+**保持不变：**
+- 数据结构、storage key、点击循环、统计、a11y
+- 季/年视图的跨月不跳星期
+- 月视图的布局（仍然是 7 列 1 周/行）
+
+---
+
 ## v0.2.4 — 2026-07-28
 
 **日历布局自适应视口**
