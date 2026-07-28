@@ -230,16 +230,30 @@
       min-width: 220px;
     }
     .settings-menu.hidden { display: none; }
+    /* v0.3.3：设置菜单对齐统一
+       - label flex: 1 1 auto，左对齐，撑满左侧
+       - input/select 固定 80px + margin-left: auto，右对齐，永远贴右
+       - 所有行 label 起点和组件终点一致，视觉整齐 */
     .settings-row {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      gap: 12px;
+      gap: 8px;
       font-size: 13px;
       color: var(--text);
+      margin-bottom: 8px;
     }
-    .settings-row input[type="number"] {
-      width: 100px;
+    .settings-row > span:first-child {
+      flex: 1 1 auto;
+      min-width: 0;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .settings-row input[type="number"],
+    .settings-row select {
+      flex: 0 0 80px;
+      width: 80px;
+      margin-left: auto;
       padding: 4px 8px;
       border: 1px solid var(--border);
       border-radius: 4px;
@@ -247,19 +261,10 @@
       font-family: inherit;
       text-align: center;
       outline: none;
-    }
-    .settings-row input[type="number"]:focus { border-color: var(--accent); }
-    .settings-row select {
-      width: 100px;
-      padding: 4px 8px;
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      font-size: 13px;
-      font-family: inherit;
       background: #fff;
-      cursor: pointer;
-      outline: none;
     }
+    .settings-row select { cursor: pointer; }
+    .settings-row input[type="number"]:focus,
     .settings-row select:focus { border-color: var(--accent); }
     /* 行内的悬浮小注释（紧跟 label/title） */
     .settings-inline-hint {
@@ -363,6 +368,12 @@
       gap: 18px;
       /* 屏占比由 main.panel 整体缩窄控制（v0.3.1 起），strip 内部直接 stretch 到 panel */
     }
+    /* v0.3.3：strip 在屏占比 < 100% 时居中（v0.3.0 行为）
+       原来 v0.3.1 改成 width: 100% 是为了跟 weekday-row 严格列对齐，但代价是
+       75% 屏占比下 strip 比 panel 小、cells 贴左不居中
+       现在用 justify-content: center 让 grid 内的列居中，
+       保留 100% 宽度 → 两 grid 列宽一致 → 列依然对齐
+       （年视图 year-strip gap 也从 1px 改 2px，跟 weekday-row 一致）*/
     .weekday-row {
       display: grid;
       /* grid-template-columns 和 font-size 由 JS 根据视口动态算 */
@@ -370,8 +381,8 @@
       color: var(--text-soft);
       text-align: center;
       margin-bottom: 3px;
-      /* stretch 到 main.panel 宽度（v0.3.1 起），跟 day-strip 严格列对齐 */
       width: 100%;
+      justify-content: center;
     }
     .weekday-row span { padding: 1px 0; }
     .weekday-row span.wkn { color: #ef4444; }
@@ -381,6 +392,7 @@
       /* grid-template-columns 和 font-size 由 JS 根据视口动态算 */
       gap: 2px;
       width: 100%;
+      justify-content: center;
     }
     .strip-day {
       /* 正方形：宽 = 网格列宽 = 网格列宽，aspect-ratio 强制高 = 宽 */
@@ -430,8 +442,11 @@
     }
     .strip-day.logged[data-clicks="2"] .strip-day-badge { background: rgba(255,255,255,0.45); }
 
-    /* 年视图：gap 更小，1px 让 53 行不至于太松散 */
-    .day-strip.year-strip { gap: 1px; }
+    /* v0.3.3：年视图 gap 从 1px 改 2px，跟 weekday-row 一致
+       之前 1px 是为了 53 行更紧凑，但跟 weekday-row 差 1px × 48 gap = 48px 列错位
+       现在用 justify-content: center 两 grid 都居中后，gap 必须一致才能列对齐
+       视觉上 53 行还是紧凑的（2px 在大屏基本看不见）*/
+    .day-strip.year-strip { gap: 2px; }
 
     /* ===== Stats ===== */
     .stats h2 {
@@ -512,11 +527,24 @@
     .modal-actions button { width: auto; padding: 6px 14px; }
 
     /* ===== Responsive ===== */
+    /* v0.3.3：窄屏（手机/小平板竖屏）3 panel 改上下堆叠，避免横屏 3 列挤压到日历看不清
+       兼容当前 .ui-wrap 结构 —— grid-template-columns 改 1fr，3 panel 自然竖排
+       .app 改 min-height: 100vh，height: auto，让 body 能滚
+       max-width 由 JS 算（堆叠模式下也用同公式：appW - 32），保证两侧 16px 边距 */
     @media (max-width: 900px) {
-      .app { grid-template-columns: 1fr; height: auto; }
+      .app {
+        height: auto;
+        min-height: 100vh;
+        align-items: flex-start;
+      }
+      .ui-wrap {
+        grid-template-columns: 1fr;
+        grid-auto-rows: auto;
+        height: auto;
+      }
       .panel { max-height: none; }
     }
-    /* v0.3.2：竖屏下屏占比设置隐藏 —— 竖屏本来 main panel 就窄，屏占比没意义 */
+    /* v0.3.2：竖屏下屏占比设置隐藏 —— 竖屏本来 main panel 就窄，屏占比再缩就崩 */
     @media (orientation: portrait) {
       .screen-ratio-row { display: none; }
     }
@@ -1129,11 +1157,12 @@
     }
 
     // ========== UI 整体宽度（仅作用于 .ui-wrap 容器）==========
-    // v0.3.2 final：3 panel 紧贴成整体居中，左右永远留 APP_MARGIN 边距
+    // v0.3.3：月视图不应用屏占比，季/年视图才用 ratio
     //
     // 影响因素清单（refactor 后所有可能影响 uiW 的变量都集中在这里）：
     //   1. 屏占比 state.screenRatio (1.0 / 0.83 / 0.75 / 0.66 / 0.5)
-    //      - 缩的是"UI 整体可用宽度 = appW - APP_MARGIN×2"，不是 mainW
+    //      - 仅作用于季/年视图：strip 居中显示，4k 大屏不显得太空
+    //      - 月视图不应用屏占比：cellUiW 永远主导（maxCellSize 决定），屏占比 75% 毫无意义
     //      - 100% 屏占比 = (appW - 32)，留 32px 边距让 3 panel 不贴屏幕
     //      - 75% 屏占比 = (appW - 32) × 0.75
     //      - 竖屏强制 1.0（matchMedia portrait + CSS @media 隐藏 .screen-ratio-row）
@@ -1145,12 +1174,12 @@
     //   5. APP_MARGIN = 16（UI 跟 .app 边缘的留白，强制留 16px 防止贴屏幕）
     //
     // 公式：
-    //   ratioUiW = floor((appW - APP_MARGIN*2) * ratio)
+    //   ratioUiW = floor((appW - APP_MARGIN*2) * ratio)   ← ratio 在月视图强制 1.0
     //   cellUiW  = SIDEBAR_W + maxCellSize*7 + GAP*6 + STATS_W + GAP*2 + UI_PAD*2
     //   uiW      = max(ratioUiW, cellUiW)
     //
     // 输出（应用 applyUiWidth）：
-    //   appW - APP_MARGIN*2 < MIN_UI_W → max-width = ''，太窄让响应式接管
+    //   appW - APP_MARGIN*2 < MIN_UI_W → max-width = ''，太窄让响应式接管（堆叠）
     //   否则                            → max-width = min(uiW, appW - APP_MARGIN*2)
     //                                     关键：永远留 APP_MARGIN 边距；uiW 超过可用宽度时按可用宽度走
     //
@@ -1168,7 +1197,10 @@
       const isPortrait = window.matchMedia
         ? window.matchMedia('(orientation: portrait)').matches
         : window.innerHeight > window.innerWidth;
-      const ratio = isPortrait ? 1.0 : (state.screenRatio || 1.0);
+      // v0.3.3：月视图不应用屏占比（cellUiW 永远主导，ratio 75% 改了也白改）
+      // 季/年视图才用 ratio —— strip 算法根据 panel 宽度算 cellSize，ratio 缩 panel 自然缩 strip
+      const isMonth = state.viewMode === 'month';
+      const ratio = (isPortrait || isMonth) ? 1.0 : (state.screenRatio || 1.0);
       const maxCellSize = state.maxCellSize || 80;
 
       // 屏占比限制
