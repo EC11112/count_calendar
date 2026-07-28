@@ -244,50 +244,31 @@
     .strip-wrap {
       display: flex;
       flex-direction: column;
-      gap: 12px;
-    }
-    .strip-block {
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 8px 6px 6px;
-    }
-    .strip-block-header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      margin-bottom: 6px;
-      padding: 0 4px;
+      gap: 18px;
     }
     .strip-block-name {
       font-size: 12px;
       font-weight: 600;
-      color: var(--text);
+      color: var(--text-soft);
+      margin-bottom: 4px;
+      padding-left: 2px;
     }
     .strip-block-name .year-tag {
       color: var(--text-faint);
       font-weight: 400;
       margin-left: 4px;
-      font-size: 11px;
-    }
-    .strip-block-name .blank-tag {
-      color: var(--text-faint);
-      font-weight: 400;
-      margin-left: 8px;
-      font-size: 11px;
     }
     .weekday-row {
       display: grid;
       grid-template-columns: repeat(var(--cols, 21), minmax(0, 1fr));
       gap: 2px;
       font-size: 9px;
-      color: var(--text-faint);
+      color: var(--text-soft);
       text-align: center;
       margin-bottom: 3px;
     }
     .weekday-row span { padding: 1px 0; }
-    .weekday-row span.we { color: #ef4444; }  /* 一/二/三/四/五 默认 */
-    .weekday-row span.wkn { color: #ef4444; } /* 日、六 */
+    .weekday-row span.wkn { color: #ef4444; }
 
     .day-strip {
       display: grid;
@@ -313,9 +294,9 @@
     .strip-day.logged { color: #fff; font-weight: 600; }
     .strip-day.logged[data-clicks="1"] { color: var(--text); font-weight: 400; }
     .strip-day.today { box-shadow: 0 0 0 1.5px var(--today-ring) inset; }
+    /* 周末的日期数字：与 weekday 一致（红/灰区分） */
+    .strip-day.wkn:not(.logged) .strip-day-num { color: #ef4444; }
     .strip-day-num { line-height: 1; }
-
-    /* 块之间用空白区分（每块是一个 strip 块） */
 
     /* ===== Stats ===== */
     .stats h2 {
@@ -689,21 +670,10 @@
 
     // ========== Render: Continuous Strip (quarter / year) ==========
     // 把一组连续月份流式展开成 strip
-    // 每个月：1号用前缀空对齐到对应周几
+    // 关键：只第一个月加前缀空对齐到对应周几，后续月份紧接上个月的最后一天 → 不会"跳星期"
     // 一行 weeksPerRow 周（7 × weeksPerRow 列），自动换行
     function buildStripBlock(months, weeksPerRow) {
-      // months: [{y, m}, ...]
-      // 返回 strip 数据：{ cols, weekdayRow: [7*N], cells: [{y,m,d,blank,date,isMonthStart}...] }
       const cols = 7 * weeksPerRow;
-      const weekdayRow = [];
-      for (let i = 0; i < weeksPerRow; i++) {
-        for (let d = 0; d < 7; d++) {
-          weekdayRow.push(d === 0 || d === 6 ? 'wkn' : 'we');
-        }
-      }
-      // weekday 标签文本（每 7 一组，每月 7 个：日一二三四五六）
-      // 我们已经在 CSS 用 .we/.wkn class 表示类型，不在这里放文字
-      // 不过用户要"日 一 二 三 四 五 六"显示，所以这里我们放纯文本
       const weekdayLabels = [];
       for (let i = 0; i < weeksPerRow; i++) {
         for (let d = 0; d < 7; d++) {
@@ -712,18 +682,22 @@
       }
 
       const cells = [];
+      // 第一个月前补空对齐到周几
+      const m0 = months[0];
+      const firstDow = new Date(m0.y, m0.m, 1).getDay();
+      for (let i = 0; i < firstDow; i++) cells.push({ blank: true });
+
+      // 连续展开（不再每月加前缀）
       for (const { y, m } of months) {
-        const firstDow = new Date(y, m, 1).getDay();  // 0=日
         const lastDate = new Date(y, m + 1, 0).getDate();
-        for (let i = 0; i < firstDow; i++) {
-          cells.push({ blank: true });
-        }
         for (let d = 1; d <= lastDate; d++) {
           cells.push({ y, m, d, date: dateStr(y, m, d), blank: false });
         }
       }
+      // 给每个 cell 加 colIndex（cells 数组中的位置），用于计算周末
+      cells.forEach((c, i) => { c.colIndex = i; });
       // 末尾补空到 cols 倍数
-      while (cells.length % cols !== 0) cells.push({ blank: true });
+      while (cells.length % cols !== 0) cells.push({ blank: true, colIndex: cells.length });
 
       return { cols, weekdayLabels, cells, months };
     }
@@ -735,11 +709,14 @@
         cell.classList.add('blank');
         return cell;
       }
-      const { y, m, d, date: ds } = cellData;
+      const { y, m, d, date: ds, colIndex } = cellData;
       cell.setAttribute('role', 'button');
       cell.setAttribute('tabindex', '0');
       cell.dataset.date = ds;
       cell.setAttribute('aria-label', `${y}年${m+1}月${d}日`);
+      // 周末标记（按 cell 在 strip 中的实际列位置）
+      const colInWeek = ((colIndex % 7) + 7) % 7;
+      if (colInWeek === 0 || colInWeek === 6) cell.classList.add('wkn');
       if (ds === todayKey) cell.classList.add('today');
       if (ds > todayKey) cell.classList.add('future');
 
@@ -778,12 +755,8 @@
       const todayKey = dateStr(now.getFullYear(), now.getMonth(), now.getDate());
       const proj = getProject(state.currentProjectId);
 
-      // 决定每个月"标签块"
-      // 季视图：1 块（3 个月一起）
-      // 年视图：按 4 个月一组（每行 4 月）？或按 3 个月一组？
-      //  为了视觉清晰，按 monthsPerBlock 分组：季视图全 1 块，年视图 3 块（每 4 月一块）
+      // 季视图 1 块（3 月），年视图按 4 月/块
       const monthsPerBlock = state.viewMode === 'quarter' ? 3 : 4;
-
       const allMonths = [];
       for (let i = 0; i < count; i++) {
         const { y, m } = addMonths(state.viewYear, state.viewMonth, i);
@@ -794,41 +767,34 @@
         blocks.push(allMonths.slice(i, i + monthsPerBlock));
       }
 
-      blocks.forEach((blockMonths, blockIdx) => {
-        const block = document.createElement('div');
-        block.className = 'strip-block';
-
-        // 块标题：months[0] 范围
+      blocks.forEach((blockMonths) => {
         const m0 = blockMonths[0];
         const mN = blockMonths[blockMonths.length - 1];
-        const header = document.createElement('div');
-        header.className = 'strip-block-header';
+        // 块标题：月份范围（不带外灰框）
         const yearTag0 = (m0.y !== state.viewYear) ? `<span class="year-tag">${m0.y}</span>` : '';
         const yearTagN = (mN.y !== m0.y) ? `<span class="year-tag">${mN.y}</span>` : '';
         const rangeLabel = (m0.y === mN.y)
           ? `${m0.m + 1}–${mN.m + 1} 月${yearTag0}`
           : `${m0.m + 1} 月${yearTag0} – ${mN.m + 1} 月${yearTagN}`;
-        const blankInfo = `<span class="blank-tag">共 ${blockMonths.length} 个月 · ${weeksPerRow} 周/行</span>`;
-        header.innerHTML = `
-          <span class="strip-block-name">${rangeLabel}</span>
-          ${blankInfo}
-        `;
-        block.appendChild(header);
+        const name = document.createElement('div');
+        name.className = 'strip-block-name';
+        name.innerHTML = rangeLabel;
+        wrap.appendChild(name);
 
         const data = buildStripBlock(blockMonths, weeksPerRow);
+
         // weekday row
         const wdRow = document.createElement('div');
         wdRow.className = 'weekday-row';
         wdRow.style.setProperty('--cols', data.cols);
         data.weekdayLabels.forEach((label, i) => {
           const span = document.createElement('span');
-          // class 用 we/wkn 标颜色（CSS 中 wkn 红）
           const isWkn = (i % 7 === 0) || (i % 7 === 6);
           span.className = isWkn ? 'wkn' : 'we';
           span.textContent = label;
           wdRow.appendChild(span);
         });
-        block.appendChild(wdRow);
+        wrap.appendChild(wdRow);
 
         // day strip
         const strip = document.createElement('div');
@@ -837,9 +803,7 @@
         data.cells.forEach(c => {
           strip.appendChild(buildStripCell(c, todayKey, proj));
         });
-        block.appendChild(strip);
-
-        wrap.appendChild(block);
+        wrap.appendChild(strip);
       });
     }
 
@@ -960,6 +924,12 @@
     }
     function setViewMode(mode) {
       if (!VIEW_STEP[mode] || state.viewMode === mode) return;
+      // 切换时把 viewMonth 对齐到当前视图的起点：本季 / 本年
+      if (mode === 'quarter') {
+        state.viewMonth = Math.floor(state.viewMonth / 3) * 3;
+      } else if (mode === 'year') {
+        state.viewMonth = 0;
+      }
       state.viewMode = mode;
       saveState();
       renderAll();
