@@ -31,9 +31,12 @@
 
     .app {
       display: grid;
-      grid-template-columns: 240px 1fr 280px;
-      gap: 16px;
-      padding: 16px;
+      /* v0.3.2：minmax(0, 1fr) 防止 main 列被 grid 内容（季/年视图的 14-21 列）撑大 —— 之前 `1fr` 默认 minmax(auto, 1fr)，min-content 一大就把 main 列撑出窗口 */
+      grid-template-columns: 240px minmax(0, 1fr) 280px;
+      /* v0.3.2：gap 16 → 8，panel 之间不要撑太开 */
+      gap: 8px;
+      /* v0.3.2：padding 0 → 8，panel 跟屏幕有 8px 呼吸（之前 0 显得 panel 边缘贴死屏幕） */
+      padding: 8px;
       height: 100vh;
       /* 不再 max-width: 1400px —— 4k 屏下被锁死，2k+ 大屏体验不到自适应 */
       margin: 0 auto;
@@ -44,9 +47,12 @@
       border: 1px solid var(--border);
       border-radius: 12px;
       box-shadow: var(--shadow);
-      padding: 16px;
+      /* v0.3.2：padding 16 → 14，配合 .app gap 8 整体间距更紧凑 */
+      padding: 14px;
       overflow: auto;
     }
+    /* v0.3.2：main panel 必须 min-width: 0，否则 grid 1fr track 会被子 grid（季/年 14-21 列）撑大 */
+    main.panel { min-width: 0; }
 
     /* ===== Sidebar ===== */
     .sidebar { display: flex; flex-direction: column; }
@@ -124,7 +130,8 @@
       display: flex;
       align-items: center;
       gap: 8px;
-      margin-bottom: 16px;
+      /* v0.3.2：margin-bottom 16 → 8，main panel 顶部 header 块之前"占位"太大，跟 sidebar/stats 不对齐 */
+      margin-bottom: 8px;
       flex-wrap: wrap;
     }
     .nav-group {
@@ -485,6 +492,10 @@
       .app { grid-template-columns: 1fr; height: auto; }
       .panel { max-height: none; }
     }
+    /* v0.3.2：竖屏下屏占比设置隐藏 —— 竖屏本来 main panel 就窄，屏占比没意义 */
+    @media (orientation: portrait) {
+      .screen-ratio-row { display: none; }
+    }
   </style>
 </head>
 <body>
@@ -512,10 +523,10 @@
           <button id="settings-btn" class="header-icon-btn" title="设置" aria-label="设置">⚙</button>
           <div class="settings-menu hidden" id="settings-menu">
             <label class="settings-row">
-              <span>最大列数</span>
+              <span>星期数</span>
               <input type="number" id="max-cols-input" min="7" max="49" step="7">
             </label>
-            <label class="settings-row">
+            <label class="settings-row screen-ratio-row">
               <span>
                 屏占比
                 <span class="settings-inline-hint" title="横屏占比：4k/2k 大屏拉到 100% 容易显得太满，降到 75%–83% 更舒服；平板/手机全屏场景可以保持 100%">?</span>
@@ -1064,11 +1075,16 @@
     //    main panel 内部再 margin auto 居中（在它自己的列里）。月视图 4k 下格子太大、季/年视图填充过满，都靠 main.panel 缩窄解决。
     // 之前（v0.3.0）的实现是给 main.panel 加 max-width + margin auto，但 .app 的 1fr 会被 sidebar/stats
     // 挤压到几乎 0（窄窗口 + 屏占比 < 1 时），main panel 直接消失 —— 改 .app grid 才能彻底控住。
+    // v0.3.2：竖屏时屏占比强制 1.0（CSS 同时也隐藏了 .screen-ratio-row），因为竖屏下 main panel 本来就窄，再缩就崩。
     function applyScreenRatio() {
       const main = document.querySelector('main.panel');
       const app = main && main.parentElement;
       if (!main || !app) return;
-      const ratio = state.screenRatio || 1.0;
+      // 竖屏判定：orientation API 优先，fallback 宽高比
+      const isPortrait = window.matchMedia
+        ? window.matchMedia('(orientation: portrait)').matches
+        : window.innerHeight > window.innerWidth;
+      const ratio = isPortrait ? 1.0 : (state.screenRatio || 1.0);
 
       if (ratio >= 1.0) {
         // 恢复默认 grid + 清除 main panel inline
@@ -1079,9 +1095,9 @@
         return;
       }
 
-      // 屏占比 < 1：算 1fr 理论宽度（父容器 .app 宽 - sidebar 240 - stats 280 - 两个 gap 16 - 两个 padding 16）
+      // 屏占比 < 1：算 1fr 理论宽度（父容器 .app 宽 - sidebar 240 - stats 280 - 两个 gap 8 - 两个 padding 8）
       const appWidth = app.clientWidth;
-      const SIDEBAR_W = 240, STATS_W = 280, GAP = 16, APP_PAD = 16 * 2;
+      const SIDEBAR_W = 240, STATS_W = 280, GAP = 8, APP_PAD = 8 * 2;
       let frWidth = appWidth - SIDEBAR_W - STATS_W - GAP * 2 - APP_PAD;
       // v0.3.1 兜底：窗口太窄（frWidth < 1024）时屏占比失效，强制 100%
       // 否则 800px 窗口 + 屏占比 75% → mainW=168px → 季/年视图被压垮
@@ -1263,13 +1279,16 @@
       renderAll();
 
       // 视口缩放时重算布局（季/年视图列数和格子大小、月视图字号、屏占比 main.panel 宽度）
+      // v0.3.2：orientationchange 同步触发（竖横屏切换时屏占比 100% / 自适应立即生效）
       let _resizeTimer = null;
-      window.addEventListener('resize', () => {
+      const onResize = () => {
         clearTimeout(_resizeTimer);
         _resizeTimer = setTimeout(() => {
           renderCalendar();
         }, 100);
-      });
+      };
+      window.addEventListener('resize', onResize);
+      window.addEventListener('orientationchange', onResize);
 
       document.getElementById('prev-month').addEventListener('click', () => shiftView(-1));
       document.getElementById('next-month').addEventListener('click', () => shiftView(1));
