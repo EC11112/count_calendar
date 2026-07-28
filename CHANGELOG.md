@@ -1,5 +1,43 @@
 # Changelog
 
+## v0.3.3 — 2026-07-28
+
+**修复 UI 整体宽度失控 + 月视图 maxCellSize 限制失效**
+
+v0.3.2 收尾后还有两个隐蔽 bug，用户在 689px 竖屏窗口下发现：
+- project / stats 块仍然贴屏幕两侧，16px 边距看不见
+- 月视图不管窗口多窄，cellSize 永远是 34（maxCellSize 限制看起来"丢了"）
+
+**1. `.ui-wrap` flex item 撑破 max-width（根因 1）：**
+- `.ui-wrap` 是 `.app` 的 flex item，flex item 默认 `min-width: auto = min-content`
+- min-content = sidebar(240) + main min-content + stats(280) + gaps ≈ 900px
+- 即便 JS 写了 `style.maxWidth = '657px'`，flex item 还是被 min-content 撑大到 ~900px
+- 后果：UI 永远撑满屏幕，屏占比 / 月视图限制都不生效
+- **修复**：`.ui-wrap { min-width: 0; }`，允许 flex item 缩到 max-width 以下
+
+**2. `measureMonthWidth()` / `measureStripWidth()` 兜底值过大（根因 2）：**
+- 旧代码：`Math.max(inner, 280)` —— 本意是 init 时 main.panel 还没布局的应急
+- 副作用：任何窄屏（包括 689px 竖屏 main 95px）都返回 280，导致 cellSize 永远按 280 算
+- 月视图 `rawCell = (280-36)/7 = 34.86 → cellSize = 34`，看起来 maxCellSize 限制"丢了"
+- 季/年 strip 同理：`calculateStripLayout(280)` → cellSize 至少 35-39
+- **修复**：兜底从 280 降到 60（极端窄兜底，避免 cellSize 算成 0/负数），真实宽度如实返回
+- 689px 竖屏实测：cellSize 现在正确缩到 28px 下限，maxCellSize=80 限制在 4k 屏下才显出价值
+
+**3. UI 整体宽度公式重构 + JSDoc 列举所有影响因素：**
+- 拆出 `calcUiWidth(appW)` 纯函数，输入 viewport 宽，返回 `{uiW, ratioUiW, cellUiW, ratio, maxCellSize, appW}`
+- `applyScreenRatio()` 改成调用 + 落地（设置 .ui-wrap.style.maxWidth）
+- JSDoc 列举全部 5 个影响因素：屏占比 / maxCellSize / sidebar+stats 固定宽 / padding+gap / APP_MARGIN
+- 公式 `uiW = max(ratio*(appW-32), maxCellSize*7 + gap*6 + sidebar + stats + gap*2 + padding*2)` 不变
+- 输出策略：太窄 fallback 撑满，否则永远 clamp 到 `appW-32` 留 16px 边距（**之前是 uiW >= appW 就清空 max-width 让 UI 撑满**，是导致贴屏幕的第二个原因）
+
+**保持不变：**
+- 数据结构、storage key `count_calendar_v2`、点击循环、统计、a11y
+- 4k 解锁、季/年 strip 跨月不跳星期、屏占比 5 档、竖屏隐藏屏占比设置
+- 月视图字号 CSS 写死、strip 字号算法 0.5/0.4 + cap 28/18、徽章阈值 cellSize ≥ 56
+- 星期数 input 转换（输入 1-7，state 存 *7，显示 /7）
+
+---
+
 ## v0.3.2 — 2026-07-28
 
 **间距全面收紧 + 屏占比改回 v0.3.0 思路 + 标签改名 + 竖屏隐藏屏占比**
