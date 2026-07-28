@@ -1,0 +1,670 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>计数日历</title>
+  <style>
+    :root {
+      --bg: #f6f7fb;
+      --panel: #ffffff;
+      --border: #e5e7eb;
+      --text: #1f2937;
+      --text-soft: #6b7280;
+      --text-faint: #9ca3af;
+      --accent: #3b82f6;
+      --hover: #f3f4f6;
+      --today-ring: #111827;
+      --shadow: 0 1px 3px rgba(0,0,0,0.04), 0 4px 12px rgba(0,0,0,0.04);
+    }
+
+    * { box-sizing: border-box; }
+    html, body { margin: 0; padding: 0; height: 100%; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC",
+                   "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.5;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 240px 1fr 280px;
+      gap: 16px;
+      padding: 16px;
+      height: 100vh;
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      box-shadow: var(--shadow);
+      padding: 16px;
+      overflow-y: auto;
+    }
+
+    /* ===== Sidebar ===== */
+    .sidebar { display: flex; flex-direction: column; }
+    .sidebar h2 {
+      margin: 0 0 12px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text-soft);
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .project-list { list-style: none; margin: 0 0 12px; padding: 0; flex: 1; }
+    .project-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 10px;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: background 0.15s;
+      user-select: none;
+    }
+    .project-item:hover { background: var(--hover); }
+    .project-item.active { background: var(--hover); }
+    .project-item .dot {
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      flex-shrink: 0;
+      box-shadow: 0 0 0 2px rgba(255,255,255,1), 0 0 0 3px rgba(0,0,0,0.06);
+    }
+    .project-item .name {
+      flex: 1;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .project-item .del {
+      visibility: hidden;
+      background: transparent;
+      border: 0;
+      color: var(--text-faint);
+      cursor: pointer;
+      font-size: 16px;
+      line-height: 1;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+    .project-item:hover .del { visibility: visible; }
+    .project-item .del:hover { background: #fee2e2; color: #dc2626; }
+
+    .btn {
+      width: 100%;
+      padding: 8px 12px;
+      border: 1px dashed var(--border);
+      background: transparent;
+      color: var(--text-soft);
+      border-radius: 8px;
+      cursor: pointer;
+      font-size: 13px;
+      transition: all 0.15s;
+    }
+    .btn:hover { border-color: var(--accent); color: var(--accent); background: #eff6ff; }
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      border: 1px solid var(--accent);
+    }
+    .btn-primary:hover { background: #2563eb; border-color: #2563eb; color: #fff; }
+    .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text-soft); }
+    .btn-ghost:hover { background: var(--hover); color: var(--text); }
+
+    /* ===== Calendar ===== */
+    .cal-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    .cal-header h1 {
+      flex: 1;
+      margin: 0;
+      font-size: 18px;
+      font-weight: 600;
+    }
+    .cal-header button {
+      padding: 4px 10px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+      color: var(--text-soft);
+      font-size: 14px;
+    }
+    .cal-header button:hover { background: var(--hover); color: var(--text); }
+
+    .weekdays {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 6px;
+      margin-bottom: 6px;
+    }
+    .weekdays span {
+      text-align: center;
+      font-size: 12px;
+      color: var(--text-faint);
+      padding: 6px 0;
+      font-weight: 500;
+    }
+    .weekdays span:nth-child(1),
+    .weekdays span:nth-child(7) { color: #ef4444; }
+
+    .days {
+      display: grid;
+      grid-template-columns: repeat(7, 1fr);
+      gap: 6px;
+    }
+    .day {
+      aspect-ratio: 1 / 1;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: flex-end;
+      padding: 6px 8px;
+      font-size: 13px;
+      color: var(--text-soft);
+      cursor: pointer;
+      transition: transform 0.1s, box-shadow 0.1s;
+      position: relative;
+      overflow: hidden;
+    }
+    .day.blank { background: transparent; border: 0; cursor: default; }
+    .day:hover:not(.blank):not(.future) {
+      transform: translateY(-1px);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.06);
+    }
+    .day.future { cursor: not-allowed; opacity: 0.5; }
+    .day.logged { color: #fff; font-weight: 600; text-shadow: 0 1px 1px rgba(0,0,0,0.15); }
+    .day.logged[data-clicks="1"] { color: var(--text); text-shadow: none; }
+    .day.today { box-shadow: 0 0 0 2px var(--today-ring) inset; }
+    .day-num { position: relative; z-index: 1; }
+    .day .badge {
+      position: absolute;
+      bottom: 4px;
+      left: 4px;
+      font-size: 10px;
+      padding: 1px 4px;
+      border-radius: 4px;
+      background: rgba(255,255,255,0.35);
+      color: inherit;
+    }
+
+    .empty-state {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 60%;
+      color: var(--text-faint);
+      font-size: 14px;
+      text-align: center;
+      padding: 24px;
+    }
+
+    /* ===== Stats ===== */
+    .stats h2 {
+      margin: 0 0 16px;
+      font-size: 16px;
+      font-weight: 600;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .stats h2 .dot {
+      width: 12px; height: 12px;
+      border-radius: 50%;
+      box-shadow: 0 0 0 2px rgba(255,255,255,1), 0 0 0 3px rgba(0,0,0,0.06);
+    }
+    .stat-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px 14px;
+      margin-bottom: 10px;
+    }
+    .stat-label { font-size: 12px; color: var(--text-faint); margin-bottom: 4px; }
+    .stat-value { font-size: 24px; font-weight: 600; }
+    .stat-value .unit { font-size: 13px; color: var(--text-soft); margin-left: 4px; font-weight: 400; }
+    .stat-sub { font-size: 12px; color: var(--text-soft); margin-top: 2px; }
+
+    .empty { color: var(--text-faint); text-align: center; padding: 32px 8px; }
+
+    /* ===== Modal ===== */
+    .modal {
+      position: fixed; inset: 0;
+      background: rgba(0,0,0,0.35);
+      display: flex; align-items: center; justify-content: center;
+      z-index: 100;
+    }
+    .modal.hidden { display: none; }
+    .modal-content {
+      background: var(--panel);
+      border-radius: 12px;
+      padding: 20px;
+      width: 320px;
+      box-shadow: 0 20px 50px rgba(0,0,0,0.15);
+    }
+    .modal-content h3 { margin: 0 0 16px; font-size: 16px; }
+    .modal-content label {
+      display: block;
+      font-size: 12px;
+      color: var(--text-soft);
+      margin-bottom: 12px;
+    }
+    .modal-content input[type="text"] {
+      width: 100%;
+      margin-top: 4px;
+      padding: 8px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      font-size: 14px;
+      outline: none;
+    }
+    .modal-content input[type="text"]:focus { border-color: var(--accent); }
+    .color-picker {
+      display: grid;
+      grid-template-columns: repeat(8, 1fr);
+      gap: 6px;
+      margin-bottom: 16px;
+    }
+    .swatch {
+      aspect-ratio: 1 / 1;
+      border-radius: 6px;
+      border: 2px solid transparent;
+      cursor: pointer;
+      padding: 0;
+    }
+    .swatch.selected { border-color: var(--text); transform: scale(1.1); }
+    .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
+    .modal-actions button { width: auto; padding: 6px 14px; }
+
+    /* ===== Responsive ===== */
+    @media (max-width: 900px) {
+      .app { grid-template-columns: 1fr; height: auto; }
+      .panel { max-height: none; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside class="panel sidebar">
+      <h2>项目</h2>
+      <ul class="project-list" id="project-list"></ul>
+      <button class="btn" id="add-project">+ 新建项目</button>
+    </aside>
+
+    <main class="panel">
+      <div class="cal-header">
+        <button id="prev-month" title="上个月">‹</button>
+        <h1 id="month-label"></h1>
+        <button id="next-month" title="下个月">›</button>
+        <button id="today-btn">今天</button>
+      </div>
+      <div class="weekdays">
+        <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+      </div>
+      <div class="days" id="days"></div>
+    </main>
+
+    <section class="panel stats">
+      <h2 id="stats-title">统计</h2>
+      <div id="stats-body"></div>
+    </section>
+  </div>
+
+  <div class="modal hidden" id="project-modal">
+    <div class="modal-content">
+      <h3>新建项目</h3>
+      <label>项目名称
+        <input type="text" id="project-name" maxlength="20" placeholder="例如：学习、跑步">
+      </label>
+      <div class="color-picker" id="color-picker"></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" id="cancel-project">取消</button>
+        <button class="btn btn-primary" id="confirm-project">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    'use strict';
+
+    // ========== Config ==========
+    const STORAGE_KEY = 'count_calendar_v2';
+    const HOURS_PER_DAY = 8;
+    const COLORS = [
+      '#ef4444', '#f59e0b', '#eab308', '#10b981',
+      '#06b6d4', '#3b82f6', '#8b5cf6', '#ec4899'
+    ];
+    const DEFAULT_PROJECTS = [
+      { id: 'p_default_study', name: '学习', color: '#3b82f6' },
+      { id: 'p_default_sport', name: '运动', color: '#10b981' },
+      { id: 'p_default_work',  name: '工作', color: '#f59e0b' }
+    ];
+
+    // ========== State ==========
+    let state = {
+      projects: [],
+      currentProjectId: null,
+      logs: {},          // { projectId: { "YYYY-MM-DD": 0|1|2 } }
+      viewYear: null,
+      viewMonth: null
+    };
+
+    // ========== Storage ==========
+    function loadState() {
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          state = Object.assign(state, parsed);
+        }
+      } catch (e) {
+        console.warn('loadState failed:', e);
+      }
+      // 兜底默认值（顺序：先填好，再统一存）
+      if (!Array.isArray(state.projects) || state.projects.length === 0) {
+        state.projects = DEFAULT_PROJECTS.slice();
+      }
+      if (!state.currentProjectId && state.projects[0]) {
+        state.currentProjectId = state.projects[0].id;
+      }
+      if (!state.logs || typeof state.logs !== 'object') state.logs = {};
+      const now = new Date();
+      if (state.viewYear == null || state.viewYear < 1900) state.viewYear = now.getFullYear();
+      if (state.viewMonth == null || state.viewMonth < 0 || state.viewMonth > 11) state.viewMonth = now.getMonth();
+      saveState();
+    }
+    function saveState() {
+      try {
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+      } catch (e) {
+        console.error('saveState failed:', e);
+      }
+    }
+
+    // ========== Helpers ==========
+    function pad2(n) { return String(n).padStart(2, '0'); }
+    function dateStr(y, m, d) { return `${y}-${pad2(m+1)}-${pad2(d)}`; }
+    function escapeHtml(s) {
+      return String(s).replace(/[&<>"']/g, c => (
+        { '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]
+      ));
+    }
+    function hexToRgba(hex, a) {
+      const v = hex.replace('#','');
+      const n = parseInt(v, 16);
+      return `rgba(${(n>>16)&255},${(n>>8)&255},${n&255},${a})`;
+    }
+    function getProject(id) { return state.projects.find(p => p.id === id); }
+    function getClicks(projectId, ds) {
+      return (state.logs[projectId] || {})[ds] || 0;
+    }
+    function setClicks(projectId, ds, clicks) {
+      if (!state.logs[projectId]) state.logs[projectId] = {};
+      if (clicks <= 0) delete state.logs[projectId][ds];
+      else state.logs[projectId][ds] = clicks;
+      saveState();
+    }
+
+    // ========== Render: Sidebar ==========
+    function renderProjects() {
+      const list = document.getElementById('project-list');
+      list.innerHTML = '';
+      if (state.projects.length === 0) {
+        list.innerHTML = '<li style="color:var(--text-faint);font-size:12px;padding:8px 10px;">还没有项目</li>';
+        return;
+      }
+      state.projects.forEach(p => {
+        const li = document.createElement('li');
+        li.className = 'project-item' + (p.id === state.currentProjectId ? ' active' : '');
+        li.innerHTML = `
+          <span class="dot" style="background:${p.color}"></span>
+          <span class="name">${escapeHtml(p.name)}</span>
+          <button class="del" data-id="${p.id}" title="删除项目">×</button>
+        `;
+        li.addEventListener('click', (e) => {
+          if (e.target.classList.contains('del')) return;
+          state.currentProjectId = p.id;
+          saveState();
+          renderAll();
+        });
+        li.querySelector('.del').addEventListener('click', (e) => {
+          e.stopPropagation();
+          const proj = getProject(p.id);
+          if (!proj) return;
+          const hasLogs = state.logs[p.id] && Object.keys(state.logs[p.id]).length > 0;
+          const msg = hasLogs
+            ? `删除项目「${proj.name}」及其所有记录？此操作无法撤销。`
+            : `删除项目「${proj.name}」？`;
+          if (!confirm(msg)) return;
+          delete state.logs[p.id];
+          state.projects = state.projects.filter(x => x.id !== p.id);
+          if (state.currentProjectId === p.id) {
+            state.currentProjectId = state.projects[0]?.id || null;
+          }
+          saveState();
+          renderAll();
+        });
+        list.appendChild(li);
+      });
+    }
+
+    // ========== Render: Calendar ==========
+    function renderCalendar() {
+      const y = state.viewYear, m = state.viewMonth;
+      document.getElementById('month-label').textContent = `${y} 年 ${m + 1} 月`;
+
+      const firstDay = new Date(y, m, 1).getDay();
+      const lastDate = new Date(y, m + 1, 0).getDate();
+      const now = new Date();
+      const todayKey = dateStr(now.getFullYear(), now.getMonth(), now.getDate());
+      const proj = getProject(state.currentProjectId);
+
+      const daysEl = document.getElementById('days');
+      daysEl.innerHTML = '';
+
+      for (let i = 0; i < firstDay; i++) {
+        const blank = document.createElement('div');
+        blank.className = 'day blank';
+        daysEl.appendChild(blank);
+      }
+
+      for (let d = 1; d <= lastDate; d++) {
+        const ds = dateStr(y, m, d);
+        const cell = document.createElement('div');
+        cell.className = 'day';
+        cell.setAttribute('role', 'button');
+        cell.setAttribute('tabindex', '0');
+        cell.dataset.date = ds;
+        cell.setAttribute('aria-label', `${y}年${m+1}月${d}日`);
+        if (ds === todayKey) cell.classList.add('today');
+        if (ds > todayKey) cell.classList.add('future');
+
+        if (proj) {
+          const clicks = getClicks(proj.id, ds);
+          if (clicks > 0) {
+            const alpha = clicks === 1 ? 0.28 : 0.85;
+            cell.style.background = hexToRgba(proj.color, alpha);
+            cell.classList.add('logged');
+            cell.dataset.clicks = String(clicks);
+            const badge = document.createElement('span');
+            badge.className = 'badge';
+            badge.textContent = clicks === 1 ? '半' : '整';
+            cell.appendChild(badge);
+          }
+        }
+
+        const num = document.createElement('span');
+        num.className = 'day-num';
+        num.textContent = d;
+        cell.appendChild(num);
+
+        if (proj && ds <= todayKey) {
+          cell.addEventListener('click', () => {
+            const cur = getClicks(proj.id, ds);
+            const next = (cur + 1) % 3;  // 0 -> 1(半天) -> 2(整天) -> 0
+            setClicks(proj.id, ds, next);
+            renderCalendar();
+            renderStats();
+          });
+        }
+        daysEl.appendChild(cell);
+      }
+    }
+
+    // ========== Render: Stats ==========
+    function sumLogs(logs) {
+      let days = 0, half = 0;
+      Object.values(logs).forEach(c => {
+        if (c === 1) half++;
+        else if (c === 2) days++;
+      });
+      return { days, half, total: days + half * 0.5 };
+    }
+    function renderStats() {
+      const proj = getProject(state.currentProjectId);
+      const titleEl = document.getElementById('stats-title');
+      const body = document.getElementById('stats-body');
+
+      if (!proj) {
+        titleEl.textContent = '统计';
+        body.innerHTML = '<p class="empty">先在左侧建一个项目 👈</p>';
+        return;
+      }
+      titleEl.innerHTML = `<span class="dot" style="background:${proj.color}"></span>${escapeHtml(proj.name)}`;
+
+      const all = sumLogs(state.logs[proj.id] || {});
+      const monthPrefix = `${state.viewYear}-${pad2(state.viewMonth + 1)}`;
+      const monthLogs = {};
+      Object.entries(state.logs[proj.id] || {}).forEach(([k, v]) => {
+        if (k.startsWith(monthPrefix)) monthLogs[k] = v;
+      });
+      const m = sumLogs(monthLogs);
+
+      body.innerHTML = `
+        <div class="stat-card">
+          <div class="stat-label">本月</div>
+          <div class="stat-value">${m.total}<span class="unit">天</span></div>
+          <div class="stat-sub">${m.days} 整天 · ${m.half} 半天</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">总计</div>
+          <div class="stat-value">${all.total}<span class="unit">天</span></div>
+          <div class="stat-sub">${all.days} 整天 · ${all.half} 半天</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">折合小时</div>
+          <div class="stat-value">${(all.total * HOURS_PER_DAY).toFixed(1)}<span class="unit">h</span></div>
+          <div class="stat-sub">按 1 天 = ${HOURS_PER_DAY}h 估算</div>
+        </div>
+      `;
+    }
+
+    function renderAll() {
+      renderProjects();
+      renderCalendar();
+      renderStats();
+    }
+
+    // ========== Color Picker ==========
+    function renderColorPicker() {
+      const picker = document.getElementById('color-picker');
+      picker.innerHTML = '';
+      COLORS.forEach((c, i) => {
+        const sw = document.createElement('button');
+        sw.className = 'swatch' + (i === 0 ? ' selected' : '');
+        sw.style.background = c;
+        sw.dataset.color = c;
+        sw.type = 'button';
+        sw.addEventListener('click', () => {
+          picker.querySelectorAll('.swatch').forEach(s => s.classList.remove('selected'));
+          sw.classList.add('selected');
+        });
+        picker.appendChild(sw);
+      });
+    }
+    function getSelectedColor() {
+      const sel = document.querySelector('#color-picker .swatch.selected');
+      return sel ? sel.dataset.color : COLORS[0];
+    }
+
+    // ========== Wire up ==========
+    function shiftMonth(delta) {
+      let m = state.viewMonth + delta;
+      let y = state.viewYear;
+      if (m < 0)  { m = 11; y--; }
+      if (m > 11) { m = 0;  y++; }
+      state.viewMonth = m;
+      state.viewYear = y;
+      saveState();
+      renderCalendar();
+      renderStats();
+    }
+    function goToday() {
+      const t = new Date();
+      state.viewYear = t.getFullYear();
+      state.viewMonth = t.getMonth();
+      saveState();
+      renderCalendar();
+      renderStats();
+    }
+    function openModal() {
+      document.getElementById('project-name').value = '';
+      renderColorPicker();
+      document.getElementById('project-modal').classList.remove('hidden');
+      setTimeout(() => document.getElementById('project-name').focus(), 0);
+    }
+    function closeModal() {
+      document.getElementById('project-modal').classList.add('hidden');
+    }
+    function confirmProject() {
+      const name = document.getElementById('project-name').value.trim();
+      if (!name) { alert('请输入项目名'); return; }
+      if (state.projects.some(p => p.name === name)) {
+        alert('已有同名项目，换一个？');
+        return;
+      }
+      const id = 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+      state.projects.push({ id, name, color: getSelectedColor() });
+      state.currentProjectId = id;
+      saveState();
+      closeModal();
+      renderAll();
+    }
+
+    // ========== Init ==========
+    function init() {
+      loadState();
+      renderColorPicker();
+      renderAll();
+
+      document.getElementById('prev-month').addEventListener('click', () => shiftMonth(-1));
+      document.getElementById('next-month').addEventListener('click', () => shiftMonth(1));
+      document.getElementById('today-btn').addEventListener('click', goToday);
+      document.getElementById('add-project').addEventListener('click', openModal);
+      document.getElementById('cancel-project').addEventListener('click', closeModal);
+      document.getElementById('confirm-project').addEventListener('click', confirmProject);
+      document.getElementById('project-name').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') confirmProject();
+        if (e.key === 'Escape') closeModal();
+      });
+      document.getElementById('project-modal').addEventListener('click', (e) => {
+        if (e.target.id === 'project-modal') closeModal();
+      });
+    }
+
+    init();
+  </script>
+</body>
+</html>
