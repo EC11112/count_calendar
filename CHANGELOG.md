@@ -1,5 +1,88 @@
 # Changelog
 
+## v0.3.4+ — 2026-07-28
+
+**统一月/季/年组件 + 隐藏滚动条 + 日历宽度滑条**
+
+v0.3.4 上线后用户用着发现几个零碎问题，集中重构一次：
+- 月视图独立组件（`.weekdays + .days`）和季/年组件（`.weekday-row + .day-strip + .strip-day`）两套结构，CSS/JS 都要分别维护
+- 季/年视图大格子强行"切月视图样式"（`.with-badge`），字号还跟着 `font-weight: 600` 加粗，看着像粗体不优雅
+- 滚动条在 1080p 屏下占 16px 视觉噪音
+- 全屏关闭后只能用一个默认宽度（cellUiW 公式），用户没法细调
+
+---
+
+**1. 月/季/年统一成 `.cal-grid` + `.cal-cell` 组件：**
+- 之前两套组件：月用 `.weekdays + .days + .day + .day-num + .badge`；季/年用 `.weekday-row + .day-strip + .strip-day + .strip-day-num + .strip-day-badge + .with-badge`
+- 统一成：`.cal-grid + .cal-cell + .cal-cell-num + .cal-cell-badge`
+- 区别只有 `grid-template-columns` 的 `cols`：
+  - 月视图：cols 锁定 7（一周一行）
+  - 季视图：cols = `state.maxStripCols`（7 的倍数，由 calculateStripLayout 算出）
+  - 年视图：cols = `state.maxStripCols`（同季视图，跟随用户设置的星期数）
+- 所有格子用同一份月视图样式（日期右上角 + 徽章左下角），不再"小格子居中 / 大格子切月视图样式"
+
+**2. JS 重构：**
+- 新增 `renderCalendarView(months, cols)` 统一函数：算 cellSize、建星期行 + 日期网格、末尾补空
+- 新增 `buildCalCell(cellData, todayKey, proj, opts)` 统一 cell 构造
+- 删了 `renderSingleMonth / renderQuarter / renderYear / buildStripData / renderStripEl / buildStripCell`，全部委托给 `renderCalendarView`
+- 新增 `calcCellSize(mainW, cols)` 统一所有视图的格子大小算法：
+  - `raw = (mainW - gap*(cols-1)) / cols`
+  - `cellSize = min(raw, maxCellSize)` cap
+  - 下限 20px（v0.3.4 月视图的 28 → 20，更宽容）
+- `calculateStripLayout` 简化：选 cols 后直接 `calcCellSize` 算 cellSize
+- `measureStripWidth` + `measureMonthWidth` 合并成 `measureMainWidth`（两者逻辑完全一样）
+- `renderHeader` 去掉对 `single-view / strip-wrap` 的显隐切换（统一 `.cal-view` 后不需要）
+
+**3. 字号公式 cap 14/10（v0.3.4 28/18 → 14/10）：**
+- 旧公式 `cellSize × 0.5` cap 28，`cellSize × 0.4` cap 18
+- 4k 大屏下 cellSize=80 → label=40（cap 28），看着像加粗
+- 新公式：
+  - `MIN_LABEL_FONT = 10, MAX_LABEL_FONT = 14`（跟月视图 CSS 写死的 14px 一致）
+  - `MIN_BADGE_FONT = 8, MAX_BADGE_FONT = 10`（跟月视图 CSS 写死的 10px 一致）
+- 方块大小与月视图一致时，所有视图显示效果跟月视图一模一样
+
+**4. 去掉 `font-weight: 600`（logged 格子也用细体）：**
+- 旧 CSS `.strip-day.logged { font-weight: 600 }` 给大格子加粗，看着像粗体不优雅
+- 旧 CSS `.cal-cell.logged { font-weight: 400 }`（新组件本来就不加粗）
+- 合并后所有视图统一 400，不需要单独处理
+
+**5. 隐藏滚动条（全局）：**
+- `* { scrollbar-width: none; -ms-overflow-style: none; }` — Firefox / IE
+- `*::-webkit-scrollbar { display: none; width: 0; height: 0; }` — Chrome / Edge / Safari
+- 滚轮 / 触摸 / 方向键 / 焦点移动 仍然能滚，只是看不到条
+- 视觉上干净，但 side panel 容量不变
+
+**6. 日历宽度滑条（settings 菜单新增）：**
+- 范围：`min = 7 × maxCellSize × 1.1`（一周大小 + 10% 余量）~ `max = window.innerWidth × 0.7`（视口 70%）
+- step 10
+- 默认值 = `state.calPanelWidth || autoMainW`（用户没拖过就显示自动算的）
+- 全屏开时 disabled（灰色 + cursor: not-allowed，CSS 已有样式）
+- 拖动时实时更新 `state.calPanelWidth` → `applyScreenRatio` → 整个 UI 重新算宽
+- `calcUiWidth` 公式：fullscreen ON → `appW - 32`；fullscreen OFF → `SIDEBAR_W + mainW + STATS_W + gaps + padding`
+  - `mainW = state.calPanelWidth || autoMainW`
+  - `autoMainW = maxCellSize × autoMainCols + gap × (autoMainCols - 1)`
+  - `autoMainCols`：月视图 = 7，季/年 = state.maxStripCols
+
+**7. 滑条 sync 助手（顶层函数）：**
+- `getSliderRange()` → 算 min/max
+- `getSliderValue()` → 算当前应该显示的值
+- `syncCalWidthSlider()` → 同步 DOM（min/max/value/disabled）
+- 调用点：init（初始化）、maxCellInput change（min 变了）、maxColsInput change（autoMainW 变了）、fullscreenInput change（disabled 切换）、setViewMode（autoMainW 变了）、onResize（视口变了 max 也要更新）
+
+**8. state 新增 `calPanelWidth`：**
+- 默认 `null`（自动算）
+- 拖过滑条后保存数字（持久化到 localStorage）
+- migration：`typeof !== 'number' || < 100` → 重置为 null
+
+**保持不变：**
+- 存储 key `count_calendar_v2`（v0.1.0+）、点击循环 0→半天→整天→0、a11y（aria-label, role=button）、统计布局
+- 月视图锁定 cols=7（用户指定）
+- 季/年视图用 `calculateStripLayout` 选 cols（保持 v0.3.4 行为）
+- 全屏开关、方块大小上限、星期数（v0.3.4 新增项不动）
+- 竖屏堆叠、min-width: 0 解决 flex 撑破、4k 解锁
+
+---
+
 ## v0.3.4 — 2026-07-28
 
 **方块大小上限全局化 + 屏占比换成全屏开关**

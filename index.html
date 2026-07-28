@@ -28,6 +28,9 @@
       font-size: 14px;
       line-height: 1.5;
     }
+    /* v0.3.4：全局隐藏滚动条（视觉上干净，需要滚动时用滚轮/触摸） */
+    * { scrollbar-width: none; -ms-overflow-style: none; }
+    *::-webkit-scrollbar { display: none; width: 0; height: 0; }
 
     .app {
       /* v0.3.2 重做：padding 0，.app 只是一个"装 .ui-wrap 的容器"，让 .ui-wrap 居中 */
@@ -272,6 +275,20 @@
       cursor: pointer;
       accent-color: var(--accent);
     }
+    /* v0.3.4+：滑条调控日历面板宽度（贴右对齐 80px 槽，全屏开时变灰禁用） */
+    .settings-row input[type="range"] {
+      flex: 0 0 80px;
+      width: 80px;
+      margin-left: auto;
+      padding: 0;
+      background: transparent;
+      cursor: pointer;
+      accent-color: var(--accent);
+    }
+    .settings-row input[type="range"]:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
     .settings-row select { cursor: pointer; }
     .settings-row input[type="number"]:focus,
     .settings-row select:focus { border-color: var(--accent); }
@@ -298,164 +315,71 @@
       line-height: 1.4;
     }
 
-    /* ===== Calendar: single month ===== */
-    .weekdays {
+    /* ===== Calendar: unified component (月/季/年共用) =====
+       v0.3.4 重构：之前 .weekdays+.days (月) 和 .weekday-row+.day-strip (季/年) 两套，
+       现在统一用 .cal-grid + .cal-cell，区别只是 cols（7 / weekCount*7 / 49）。
+       月视图锁定 cols=7，季/年用 maxStripCols。
+       字号公式统一：label = 0.5*cellSize cap 14，badge = 0.4*cellSize cap 10
+       季/年不再有"小格子居中"和"大格子切月视图样式"的区分——所有格子都用月视图样式（日期右上+徽章左下）*/
+    .cal-grid {
       display: grid;
-      grid-template-columns: repeat(7, 1fr);
-      gap: 6px;
-      margin-bottom: 6px;
-      /* v0.3.2：JS 改 grid-template-columns 为固定 cellSize 时，.weekdays 自身 fit-content 居中 */
-      width: fit-content;
-      max-width: 100%;
-      margin-left: auto;
-      margin-right: auto;
+      /* grid-template-columns 和 font-size 由 JS 根据视口和 cols 动态算 */
+      gap: 2px;
+      width: 100%;
+      justify-content: center;
     }
-    .weekdays span {
-      text-align: center;
-      /* 月视图字号固定，不参与 strip 动态字号算法（v0.3.0 拆开） */
-      font-size: 14px;
+    .cal-weekdays {
       color: var(--text-faint);
-      padding: 6px 0;
+      text-align: center;
+      margin-bottom: 3px;
       font-weight: 500;
     }
-    .weekdays span:nth-child(1),
-    .weekdays span:nth-child(7) { color: #ef4444; }
+    .cal-weekdays span { padding: 1px 0; }
+    .cal-weekdays span.wkn { color: #ef4444; }
 
-    .days {
-      display: grid;
-      grid-template-columns: repeat(7, 1fr);
-      gap: 6px;
-      /* v0.3.2：JS 改 grid-template-columns 为固定 cellSize 时，.days 自身 fit-content 居中 */
-      width: fit-content;
-      max-width: 100%;
-      margin-left: auto;
-      margin-right: auto;
-    }
-    .day {
+    .cal-cell {
       aspect-ratio: 1 / 1;
       background: var(--panel);
       border: 1px solid var(--border);
-      border-radius: 8px;
+      border-radius: 4px;
       display: flex;
       align-items: flex-start;
       justify-content: flex-end;
       padding: 6px 8px;
-      /* 月视图字号固定 14px，不参与 strip 动态字号算法（v0.3.0 拆开） */
-      font-size: 14px;
+      font-size: 14px;  /* fallback，JS 会按 cellSize 动态算 */
       color: var(--text-soft);
       cursor: pointer;
-      transition: transform 0.1s, box-shadow 0.1s;
       position: relative;
       overflow: hidden;
     }
-    .day.blank { background: transparent; border: 0; cursor: default; }
-    .day:hover:not(.blank):not(.future) {
-      transform: translateY(-1px);
-      box-shadow: 0 2px 6px rgba(0,0,0,0.06);
-    }
-    .day.future { cursor: not-allowed; opacity: 0.5; }
-    .day.logged { color: #fff; font-weight: 600; text-shadow: 0 1px 1px rgba(0,0,0,0.15); }
-    .day.logged[data-clicks="1"] { color: var(--text); text-shadow: none; }
-    .day.today { box-shadow: 0 0 0 2px var(--today-ring) inset; }
-    .day-num { position: relative; z-index: 1; }
-    .day .badge {
+    .cal-cell.blank { background: transparent; border: 0; cursor: default; }
+    .cal-cell.future { cursor: not-allowed; opacity: 0.5; }
+    /* v0.3.4：去掉奇怪的 font-weight: 600（加粗），所有 logged 格子都用细体 */
+    .cal-cell.logged { color: #fff; font-weight: 400; }
+    .cal-cell.logged[data-clicks="1"] { color: var(--text); }
+    .cal-cell.logged[data-clicks="2"] { color: #fff; }
+    .cal-cell.today { box-shadow: 0 0 0 2px var(--today-ring) inset; }
+    .cal-cell-num { line-height: 1; }
+    /* 周末（未 logged）的日期数字红色，跟 weekday 行一致 */
+    .cal-cell.wkn:not(.logged) .cal-cell-num { color: #ef4444; }
+    .cal-cell-badge {
       position: absolute;
       bottom: 4px;
       left: 4px;
-      /* 月视图 badge 字号固定 10px，不参与 strip 动态字号算法 */
-      font-size: 10px;
-      padding: 1px 4px;
-      border-radius: 4px;
-      background: rgba(255,255,255,0.35);
-      color: inherit;
-    }
-
-    /* ===== Calendar: continuous strip (quarter / year) ===== */
-    .strip-wrap {
-      display: flex;
-      flex-direction: column;
-      gap: 18px;
-      /* 屏占比由 main.panel 整体缩窄控制（v0.3.1 起），strip 内部直接 stretch 到 panel */
-    }
-    /* v0.3.3：strip 在屏占比 < 100% 时居中（v0.3.0 行为）
-       原来 v0.3.1 改成 width: 100% 是为了跟 weekday-row 严格列对齐，但代价是
-       75% 屏占比下 strip 比 panel 小、cells 贴左不居中
-       现在用 justify-content: center 让 grid 内的列居中，
-       保留 100% 宽度 → 两 grid 列宽一致 → 列依然对齐
-       （年视图 year-strip gap 也从 1px 改 2px，跟 weekday-row 一致）*/
-    .weekday-row {
-      display: grid;
-      /* grid-template-columns 和 font-size 由 JS 根据视口动态算 */
-      gap: 2px;
-      color: var(--text-soft);
-      text-align: center;
-      margin-bottom: 3px;
-      width: 100%;
-      justify-content: center;
-    }
-    .weekday-row span { padding: 1px 0; }
-    .weekday-row span.wkn { color: #ef4444; }
-
-    .day-strip {
-      display: grid;
-      /* grid-template-columns 和 font-size 由 JS 根据视口动态算 */
-      gap: 2px;
-      width: 100%;
-      justify-content: center;
-    }
-    .strip-day {
-      /* 正方形：宽 = 网格列宽 = 网格列宽，aspect-ratio 强制高 = 宽 */
-      aspect-ratio: 1 / 1;
-      background: var(--panel);
-      border: 1px solid var(--border);
-      border-radius: 2px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      /* font-size 由 JS 动态算（cell * 0.2，夹 9-24） */
-      color: var(--text-soft);
-      cursor: pointer;
-      position: relative;
-    }
-    .strip-day.blank { background: transparent; border: 0; cursor: default; }
-    .strip-day.future { cursor: not-allowed; opacity: 0.4; }
-    .strip-day.logged { color: #fff; font-weight: 600; }
-    .strip-day.logged[data-clicks="1"] { color: var(--text); font-weight: 400; }
-    .strip-day.today { box-shadow: 0 0 0 1.5px var(--today-ring) inset; }
-    /* 周末的日期数字：与 weekday 一致（红/灰区分） */
-    .strip-day.wkn:not(.logged) .strip-day-num { color: #ef4444; }
-    .strip-day-num { line-height: 1; }
-
-    /* 大格子（cellSize >= 35）：切月视图样式 — 日期右上角、徽章左下角，不再居中 */
-    .strip-day.with-badge {
-      display: block;
-      padding: 3px 5px;
-    }
-    .strip-day.with-badge .strip-day-num {
-      position: absolute;
-      top: 2px;
-      right: 4px;
-      font-size: 0.6em; /* 相对 cell 的 70%，徽章更小 */
-      font-weight: 500;
-    }
-    .strip-day-badge {
-      position: absolute;
-      bottom: 2px;
-      left: 4px;
-      font-size: 0.45em;
+      font-size: 10px;  /* fallback，JS 动态算 */
       padding: 1px 4px;
       border-radius: 3px;
       background: rgba(255,255,255,0.35);
       color: inherit;
       line-height: 1.1;
     }
-    .strip-day.logged[data-clicks="2"] .strip-day-badge { background: rgba(255,255,255,0.45); }
+    .cal-cell.logged[data-clicks="2"] .cal-cell-badge { background: rgba(255,255,255,0.45); }
 
-    /* v0.3.3：年视图 gap 从 1px 改 2px，跟 weekday-row 一致
-       之前 1px 是为了 53 行更紧凑，但跟 weekday-row 差 1px × 48 gap = 48px 列错位
-       现在用 justify-content: center 两 grid 都居中后，gap 必须一致才能列对齐
-       视觉上 53 行还是紧凑的（2px 在大屏基本看不见）*/
-    .day-strip.year-strip { gap: 2px; }
+    /* v0.3.4+：旧 .strip-wrap / .weekday-row / .day-strip / .strip-day / .strip-day-num / .strip-day-badge 全部删除
+       改用上面的统一 .cal-grid + .cal-cell + .cal-cell-num + .cal-cell-badge 组件
+       - 月视图 cols=7，季视图 cols=weekCount*7，年视图 cols=49（统一一个 grid）
+       - 所有格子都用月视图样式（日期右上 + 徽章左下），不再"小格子居中 / 大格子切月视图样式"
+       - 字号公式统一 cap 14/10，方块大小与月视图一致时显示效果与月视图一致 */
 
     /* ===== Stats ===== */
     .stats h2 {
@@ -601,25 +525,34 @@
             <label class="settings-row screen-ratio-row">
               <span>
                 全屏
-                <span class="settings-inline-hint" title="开：UI 占满 viewport 宽度（留 16px 边距）。关：UI 宽度由 cellSize × 星期数 × 7 反推，刚好包住日历年历，4k 大屏下会缩到中间。">?</span>
+                <span class="settings-inline-hint" title="开：UI 占满 viewport 宽度（留 16px 边距）。关：UI 宽度由滑条 / cellSize × 星期数 × 7 决定，4k 大屏下会缩到中间。">?</span>
               </span>
               <input type="checkbox" id="fullscreen-input">
+            </label>
+            <!-- v0.3.4+：滑条调控日历面板 mainW，全屏开时灰色禁用
+                 min = 7 * 方块上限 * 1.1（一周大小 + 10% 余量）
+                 max = viewport * 0.7
+                 默认 = 当前视图的 cellUiW mainW -->
+            <label class="settings-row screen-ratio-row">
+              <span>
+                日历宽度
+                <span class="settings-inline-hint" title="非全屏时手动调节 main panel 宽度（7 × 方块上限 × 1.1 ~ 视口 × 70%）。全屏开时该选项无效。">?</span>
+              </span>
+              <input type="range" id="cal-width-input" min="0" max="0" step="10">
             </label>
             <p class="settings-hint">列数 21–28（cellSize 41–49px）效果最佳</p>
           </div>
         </div>
       </div>
 
-      <!-- 月视图 -->
-      <div id="single-view">
-        <div class="weekdays">
-          <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
-        </div>
-        <div class="days" id="days"></div>
+      <!-- v0.3.4+：月/季/年统一 .cal-view 容器
+           - 内部两个 .cal-grid：cal-weekdays（星期行）+ cal-days（日期网格）
+           - 区别只是 cols：月=7，季=weekCount*7，年=49
+           - JS 在 renderCalendarView 里统一填格子 -->
+      <div class="cal-view" id="cal-view">
+        <div class="cal-grid cal-weekdays" id="cal-weekdays"></div>
+        <div class="cal-grid cal-days" id="cal-days"></div>
       </div>
-
-      <!-- 季/年视图：连续 strip 布局 -->
-      <div class="strip-wrap" id="strip-wrap" style="display:none"></div>
     </main>
 
     <section class="panel stats">
@@ -674,16 +607,19 @@
     const MIN_CELL_SIZE     = 41;        // 1080 * 0.8 / 21 ≈ 41，下限
     const STRIP_GAP         = 2;
     const MIN_STRIP_COLS    = 7;
-    // 字体算法（v0.3.0 调小）：
-    //  - 0.7/0.5 那版数字太大、看着像加粗（浏览器在 font-size 接近格子边长时抗锯齿退化）
-    //  - 改 0.5/0.4 配合 cap 28/18，cell=41 时 label≈20/21，cell=80 时 label≈28（cap）
-    //  - 月视图不参与这套，CSS 写死 14/14/10
+    // 字体算法（v0.3.4+ 统一 cap 14/10）：
+    //  - v0.3.0 调小：0.5/0.4 配 cap 28/18；cell=41 时 label≈21，cell=80 时 label≈28（cap）
+    //  - v0.3.4+：把 cap 降到 14/10，跟月视图 CSS 写死的 14/10 完全一致
+    //  - 这样季/年视图方块大小与月视图一致时，显示效果跟月视图一模一样
+    //  - cell=20 时 label = max(10, min(14, 0.5*20=10)) = 10；cell=28+ 时全部 cap 14
+    //  - cell=20 时 badge = max(8, min(10, 0.4*20=8)) = 8；cell=25+ 时全部 cap 10
+    //  - 月视图也不写死 CSS 了，跟季/年走同一公式（cellSize 算法也用统一的 cap）
     const LABEL_FONT_RATIO  = 0.5;       // weekday / date 数字 / 月份标签
     const BADGE_FONT_RATIO  = 0.4;       // "半" / "整" 徽章
-    const MIN_LABEL_FONT    = 14;        // cell=28 兜底字（不被 min cell 触发）
-    const MAX_LABEL_FONT    = 28;        // 2k+ 大屏 cap，避免再像加粗
-    const MIN_BADGE_FONT    = 9;
-    const MAX_BADGE_FONT    = 18;
+    const MIN_LABEL_FONT    = 10;        // cell≤20 时的下限
+    const MAX_LABEL_FONT    = 14;        // 跟月视图 CSS 写死的 14px 一致
+    const MIN_BADGE_FONT    = 8;         // cell≤20 时的下限
+    const MAX_BADGE_FONT    = 10;        // 跟月视图 CSS 写死的 10px 一致
     // 徽章渲染阈值（v0.3.0 改公式）：
     //  - 旧值 35 在 1080p 半屏竖屏触发，但小格里 "半" 跟日期数字会重叠
     //  - 用户公式 cellSize > 字体px * 4：参考最小字号 14 * 4 = 56，作为"能放下 4 个字"的最小宽度
@@ -693,22 +629,26 @@
     function shouldShowBadge(cellSize) { return cellSize >= BADGE_MIN_CELLSIZE; }
 
     function calculateStripLayout(containerWidth) {
-      // v0.3.4：移除屏占比乘 ratio（已改成全屏开关），直接用 panel 宽度
-      // 季/年视图 cellSize 也按 maxCellSize 截断，跟月视图一致
-      const effectiveWidth = containerWidth;
+      // v0.3.4+：季/年视图选列算法（从 maxStripCols 向下试 7 的倍数，第一个 cellSize >= 41 的列数即为最优）
+      // 月视图不走这里，renderSingleMonth 直接传 cols=7
       const maxCols = state.maxStripCols || DEFAULT_MAX_STRIP_COLS;
-      const cellSizeCap = state.maxCellSize || 80;
-      // 把 maxCols 向下取整到 7 的倍数
       const maxAligned = Math.floor(maxCols / 7) * 7;
       for (let cols = maxAligned; cols >= MIN_STRIP_COLS; cols -= 7) {
-        const raw = Math.floor((effectiveWidth - STRIP_GAP * (cols - 1)) / cols);
-        // v0.3.4：方块上限应用到所有视图，cellSize 最大不超过 maxCellSize
-        const cellSize = Math.min(raw, cellSizeCap);
+        const cellSize = calcCellSize(containerWidth, cols);
         if (cellSize >= MIN_CELL_SIZE) return { cols, cellSize };
       }
-      // 极窄屏兜底：用 7 列、cell 尽可能大（允许 < 41，也允许 > cellSizeCap 让格更清楚）
-      const fallback = Math.floor((effectiveWidth - STRIP_GAP * (MIN_STRIP_COLS - 1)) / MIN_STRIP_COLS);
-      return { cols: MIN_STRIP_COLS, cellSize: Math.max(fallback, 20) };
+      // 极窄屏兜底：用 7 列（cellSize 可能 < 41）
+      return { cols: MIN_STRIP_COLS, cellSize: calcCellSize(containerWidth, MIN_STRIP_COLS) };
+    }
+    // v0.3.4+：统一所有视图的格子大小算法
+    // - raw = (mainW - gap*(cols-1)) / cols
+    // - cellSize = min(raw, maxCellSize) cap
+    // - 下限 20px（cellSize 再小就基本看不清了）
+    function calcCellSize(mainW, cols) {
+      const gap = STRIP_GAP;  // 2px（v0.3.4+ 统一月/季/年）
+      const raw = Math.floor((mainW - gap * (cols - 1)) / cols);
+      const cap = state.maxCellSize || 80;
+      return Math.max(20, Math.min(raw, cap));
     }
     function calcLabelFontSize(cellSize) {
       return Math.max(MIN_LABEL_FONT, Math.min(MAX_LABEL_FONT, Math.round(cellSize * LABEL_FONT_RATIO)));
@@ -716,17 +656,8 @@
     function calcBadgeFontSize(cellSize) {
       return Math.max(MIN_BADGE_FONT, Math.min(MAX_BADGE_FONT, Math.round(cellSize * BADGE_FONT_RATIO)));
     }
-    function measureStripWidth() {
-      // 季/年 strip 布局的可用宽度（main.panel content 宽度 - 32 padding+border）
-      // v0.3.2 修复：去掉 Math.max(..., 280) 兜底，理由同 measureMonthWidth
-      const wrap = document.getElementById('strip-wrap') || document.getElementById('single-view');
-      const panel = (wrap && wrap.closest('.panel')) || document.querySelector('main.panel');
-      const inner = panel ? panel.clientWidth - 32 : 280;
-      return Math.max(inner, 60);
-    }
-    function measureMonthWidth() {
-      // 月视图固定 7 列，gap = 6
-      // 返回 main.panel 的 content 宽度（clientWidth - 32 padding+border）
+    function measureMainWidth() {
+      // v0.3.4+：月/季/年统一读 main panel content 宽度（clientWidth - 32 padding+border）
       // 真实窄屏（如 689px 竖屏 main 95px）也要如实返回，让 cellSize 走 min(rawCell, maxCellSize) 自动缩
       // v0.3.2 修复：去掉 Math.max(..., 280) 兜底 —— 那是为了初始化时 main.panel 还没布局的应急，
       // 实际场景下 main.panel 一定有 clientWidth，这个兜底反而让窄屏 cellSize 永远按 280 算、看起来"maxCellSize 限制丢了"
@@ -748,7 +679,10 @@
       maxCellSize: 80,
       // v0.3.4：全屏开关（true=UI 撑满 viewport - 32，false=UI 刚好包住日历年历 cellSize*7*weekCount）
       // 替代 v0.3.0-v0.3.3 的 5 档屏占比
-      fullscreen: true
+      fullscreen: true,
+      // v0.3.4+：日历面板 mainW 滑条值（null = 自动用 cellUiW 公式）
+      // 范围 7*maxCellSize*1.1 ~ appW*0.7，step 10
+      calPanelWidth: null
     };
 
     // v0.3.0-v0.3.3 旧版屏占比档位（仅 migration 用，把旧值映射到新全屏开关）
@@ -804,6 +738,11 @@
         }
         // 清掉旧字段避免下次 migration 误判
         delete state.screenRatio;
+      }
+      // v0.3.4+：calPanelWidth 必须是 7*maxCellSize*1.1 ~ appW*0.7 之间的有效值，否则 null
+      // （存进 localStorage 时可能是某个历史值，加载时按当前约束重新校准）
+      if (typeof state.calPanelWidth !== 'number' || state.calPanelWidth < 100) {
+        state.calPanelWidth = null;
       }
       saveState();
     }
@@ -914,199 +853,83 @@
       }
       document.getElementById('month-label').textContent = label;
 
-      const single = document.getElementById('single-view');
-      const strip  = document.getElementById('strip-wrap');
-      const isSingle = state.viewMode === 'month';
-      single.style.display = isSingle ? '' : 'none';
-      strip.style.display  = isSingle ? 'none' : '';
+      // v0.3.4+：月/季/年统一 .cal-view，不再按 viewMode 切换显隐
     }
 
-    // ========== Render: Single Month ==========
-    function renderSingleMonth() {
-      const y = state.viewYear, m = state.viewMonth;
-      const firstDay = new Date(y, m, 1).getDay();
-      const lastDate = new Date(y, m + 1, 0).getDate();
+    // ========== Render: Unified calendar view (月/季/年共用) ==========
+    // v0.3.4+ 重构：之前月/季/年是两套不同组件（.weekdays+.days vs .weekday-row+.day-strip+.strip-day），
+    // 现在统一用 .cal-grid + .cal-cell，区别只是 cols：
+    //   - 月视图：cols 锁定 7（一周一行）
+    //   - 季视图：cols = state.maxStripCols（7 的倍数，由 calculateStripLayout 算出）
+    //   - 年视图：cols = state.maxStripCols（7 的倍数，7 周一行 = 49 比较自然，但跟随用户设置）
+    // 字号公式也统一 cap 14/10，cellSize 与月视图一致时显示效果一致
+    function renderCalendarView(months, cols) {
+      const mainW = measureMainWidth();
+      const cellSize = calcCellSize(mainW, cols);
+      const gridTemplate = `repeat(${cols}, ${cellSize}px)`;
+      const labelFont = calcLabelFontSize(cellSize);
+      const badgeFont = calcBadgeFontSize(cellSize);
+      // v0.3.0：徽章渲染条件 cellSize >= 56（能放下 4 个 14px 字宽），小格里 "半" 跟日期数字会重叠
+      const useBadge = shouldShowBadge(cellSize);
       const now = new Date();
       const todayKey = dateStr(now.getFullYear(), now.getMonth(), now.getDate());
       const proj = getProject(state.currentProjectId);
 
-      // 算月视图格子大小（固定 7 列，gap 6）—— 仅用于布局，字号 CSS 写死
-      // v0.3.2：加上 maxCellSize 上限 —— 4k 大屏下 cellSize 会算到 200+，用 maxCellSize 截断
-      const MONTH_GAP = 6;
-      const monthContainer = measureMonthWidth();
-      const maxCell = state.maxCellSize || 80;
-      const rawCell = Math.floor((monthContainer - MONTH_GAP * 6) / 7);
-      const cellSize = Math.max(28, Math.min(rawCell, maxCell));
-
-      // v0.3.2：grid-template-columns 固定 cellSize，.days 实际宽度 = 7*cellSize+6*gap + 自身 margin auto 居中
-      const gridTemplate = `repeat(7, ${cellSize}px)`;
-
-      // v0.3.0：月视图字号 CSS 写死 14/14/10，不参与 strip 动态字号算法
-      const weekdays = document.querySelector('.weekdays');
-      weekdays.style.fontSize = '';  // 清掉 v0.2.5 设的内联字号，让 CSS 接管
-      weekdays.style.gridTemplateColumns = gridTemplate;
-
-      const daysEl = document.getElementById('days');
-      daysEl.innerHTML = '';
-      daysEl.style.fontSize = '';   // 同上
-      daysEl.style.gridTemplateColumns = gridTemplate;
-
-      for (let i = 0; i < firstDay; i++) {
-        const blank = document.createElement('div');
-        blank.className = 'day blank';
-        daysEl.appendChild(blank);
-      }
-
-      for (let d = 1; d <= lastDate; d++) {
-        const ds = dateStr(y, m, d);
-        const cell = document.createElement('div');
-        cell.className = 'day';
-        cell.setAttribute('role', 'button');
-        cell.setAttribute('tabindex', '0');
-        cell.dataset.date = ds;
-        cell.setAttribute('aria-label', `${y}年${m+1}月${d}日`);
-        if (ds === todayKey) cell.classList.add('today');
-        if (ds > todayKey) cell.classList.add('future');
-
-        if (proj) {
-          const clicks = getClicks(proj.id, ds);
-          if (clicks > 0) {
-            const alpha = clicks === 1 ? 0.28 : 0.85;
-            cell.style.background = hexToRgba(proj.color, alpha);
-            cell.classList.add('logged');
-            cell.dataset.clicks = String(clicks);
-            const badge = document.createElement('span');
-            badge.className = 'badge';
-            badge.textContent = clicks === 1 ? '半' : '整';
-            // 月视图 badge 字号由 CSS 写死（10px），不再内联设置
-            cell.appendChild(badge);
-          }
-        }
-
-        const num = document.createElement('span');
-        num.className = 'day-num';
-        num.textContent = d;
-        cell.appendChild(num);
-
-        if (proj && ds <= todayKey) {
-          cell.addEventListener('click', () => {
-            const cur = getClicks(proj.id, ds);
-            const next = (cur + 1) % 3;
-            setClicks(proj.id, ds, next);
-            renderCalendar();
-            renderStats();
-          });
-        }
-        daysEl.appendChild(cell);
-      }
-    }
-
-    // ========== Render: Strip data (shared by quarter / year) ==========
-    // 把一组连续月份流式展开成 strip 数据
-    // 关键：只第一个月加前缀空对齐到对应周几，后续月份紧接上个月的最后一天 → 不会"跳星期"
-    // cols 由调用方根据视口算出（7 的倍数）
-    function buildStripData(months, cols) {
+      // 星期行：按 weeksPerRow 重复 日 一 二 三 四 五 六
       const weeksPerRow = cols / 7;
       const weekdayLabels = [];
       for (let i = 0; i < weeksPerRow; i++) {
-        for (let d = 0; d < 7; d++) {
-          weekdayLabels.push(WEEKDAY_NAMES[d]);
-        }
+        for (let d = 0; d < 7; d++) weekdayLabels.push(WEEKDAY_NAMES[d]);
       }
-
-      const cells = [];
-      const m0 = months[0];
-      const firstDow = new Date(m0.y, m0.m, 1).getDay();
-      for (let i = 0; i < firstDow; i++) cells.push({ blank: true });
-
-      for (const { y, m } of months) {
-        const lastDate = new Date(y, m + 1, 0).getDate();
-        for (let d = 1; d <= lastDate; d++) {
-          cells.push({ y, m, d, date: dateStr(y, m, d), blank: false });
-        }
-      }
-      cells.forEach((c, i) => { c.colIndex = i; });
-      while (cells.length % cols !== 0) cells.push({ blank: true, colIndex: cells.length });
-
-      return { cols, weekdayLabels, cells };
-    }
-
-    // 把 strip 数据渲染到 #strip-wrap（weekday row + day strip）
-    // cols/cellSize/fontSize 由 calculateStripLayout + calcLabelFontSize 根据视口算出
-    function renderStripEl(data, cellSize, stripClass) {
-      const wrap = document.getElementById('strip-wrap');
-      wrap.innerHTML = '';
-      const now = new Date();
-      const todayKey = dateStr(now.getFullYear(), now.getMonth(), now.getDate());
-      const proj = getProject(state.currentProjectId);
-
-      const gridStyle = `repeat(${data.cols}, ${cellSize}px)`;
-      const labelFont = calcLabelFontSize(cellSize);
-      const badgeFont = calcBadgeFontSize(cellSize);
-      // v0.3.0：徽章渲染条件改为"能放下 4 个参考字号宽（≥ 56px）"，
-      // 避免小格里"半"跟日期数字重叠
-      const useBadgeStyle = shouldShowBadge(cellSize);
-
-      // weekday row
-      const wdRow = document.createElement('div');
-      wdRow.className = 'weekday-row';
-      wdRow.style.gridTemplateColumns = gridStyle;
+      const wdRow = document.getElementById('cal-weekdays');
+      wdRow.innerHTML = '';
+      wdRow.style.gridTemplateColumns = gridTemplate;
       wdRow.style.fontSize = `${labelFont}px`;
-      data.weekdayLabels.forEach((label, i) => {
+      weekdayLabels.forEach((label, i) => {
         const span = document.createElement('span');
-        const isWkn = (i % 7 === 0) || (i % 7 === 6);
-        span.className = isWkn ? 'wkn' : 'we';
+        const colInWeek = i % 7;
+        if (colInWeek === 0 || colInWeek === 6) span.className = 'wkn';
         span.textContent = label;
         wdRow.appendChild(span);
       });
-      wrap.appendChild(wdRow);
 
-      // day strip
-      const strip = document.createElement('div');
-      strip.className = 'day-strip' + (stripClass ? ' ' + stripClass : '');
-      strip.style.gridTemplateColumns = gridStyle;
-      strip.style.fontSize = `${labelFont}px`;
-      data.cells.forEach(c => {
-        strip.appendChild(buildStripCell(c, todayKey, proj, { useBadgeStyle, badgeFont }));
-      });
-      wrap.appendChild(strip);
-    }
+      // 日期网格：第一个月加前缀空对齐到对应周几，后续月份紧接上个月最后一天 → 不会"跳星期"
+      const daysEl = document.getElementById('cal-days');
+      daysEl.innerHTML = '';
+      daysEl.style.gridTemplateColumns = gridTemplate;
+      daysEl.style.fontSize = `${labelFont}px`;
 
-    // 季视图：1 块，3 个月连续流，列数由视口决定（7 的倍数）
-    function renderQuarter() {
-      const months = [];
-      for (let i = 0; i < 3; i++) {
-        const { y, m } = addMonths(state.viewYear, state.viewMonth, i);
-        months.push({ y, m });
+      const m0 = months[0];
+      const firstDow = new Date(m0.y, m0.m, 1).getDay();
+      const cellData = [];
+      for (let i = 0; i < firstDow; i++) cellData.push({ blank: true });
+      for (const { y, m } of months) {
+        const lastDate = new Date(y, m + 1, 0).getDate();
+        for (let d = 1; d <= lastDate; d++) {
+          cellData.push({ y, m, d, ds: dateStr(y, m, d), blank: false });
+        }
       }
-      const { cols, cellSize } = calculateStripLayout(measureStripWidth());
-      const data = buildStripData(months, cols);
-      renderStripEl(data, cellSize);
+      cellData.forEach((c, i) => { c.colIndex = i; });
+      // 末尾补空让 cellData 长度 = cols 的倍数（最后一行 weekday 标签也填满，对齐列）
+      while (cellData.length % cols !== 0) cellData.push({ blank: true, colIndex: cellData.length });
+
+      cellData.forEach(c => daysEl.appendChild(buildCalCell(c, todayKey, proj, { useBadge, badgeFont })));
     }
 
-    // 年视图：独立组件，1 块，12 个月连续流，列数由视口决定
-    function renderYear() {
-      const months = [];
-      for (let m = 0; m < 12; m++) months.push({ y: state.viewYear, m });
-      const { cols, cellSize } = calculateStripLayout(measureStripWidth());
-      const data = buildStripData(months, cols);
-      renderStripEl(data, cellSize, 'year-strip');
-    }
-
-    function buildStripCell(cellData, todayKey, proj, opts) {
-      const { useBadgeStyle, badgeFont } = opts || {};
+    function buildCalCell(cellData, todayKey, proj, opts) {
+      const { useBadge, badgeFont } = opts || {};
       const cell = document.createElement('div');
-      cell.className = 'strip-day';
+      cell.className = 'cal-cell';
       if (cellData.blank) {
         cell.classList.add('blank');
         return cell;
       }
-      const { y, m, d, date: ds, colIndex } = cellData;
+      const { y, m, d, ds, colIndex } = cellData;
       cell.setAttribute('role', 'button');
       cell.setAttribute('tabindex', '0');
       cell.dataset.date = ds;
       cell.setAttribute('aria-label', `${y}年${m+1}月${d}日`);
-      // 周末标记（按 cell 在 strip 中的实际列位置）
+      // 周末标记（按 cell 在 grid 中的实际列位置）
       const colInWeek = ((colIndex % 7) + 7) % 7;
       if (colInWeek === 0 || colInWeek === 6) cell.classList.add('wkn');
       if (ds === todayKey) cell.classList.add('today');
@@ -1123,18 +946,15 @@
         }
       }
 
-      // 大格子（cellSize >= 56，见 shouldShowBadge）：切月视图样式（日期右上角、徽章左下角）
-      if (useBadgeStyle) cell.classList.add('with-badge');
-
       const num = document.createElement('span');
-      num.className = 'strip-day-num';
+      num.className = 'cal-cell-num';
       num.textContent = d;
       cell.appendChild(num);
 
       // 大格子 + 有 log → 加 "半"/"整" 徽章
-      if (useBadgeStyle && clicks > 0) {
+      if (useBadge && clicks > 0) {
         const badge = document.createElement('span');
-        badge.className = 'strip-day-badge';
+        badge.className = 'cal-cell-badge';
         badge.textContent = clicks === 1 ? '半' : '整';
         badge.style.fontSize = `${badgeFont}px`;
         cell.appendChild(badge);
@@ -1152,8 +972,32 @@
       return cell;
     }
 
+    // 月视图：cols 锁定 7（一周一行）
+    function renderSingleMonth() {
+      renderCalendarView([{ y: state.viewYear, m: state.viewMonth }], 7);
+    }
+
+    // 季视图：1 块，3 个月连续流，列数由 calculateStripLayout 决定（基于 state.maxStripCols）
+    function renderQuarter() {
+      const months = [];
+      for (let i = 0; i < 3; i++) {
+        const { y, m } = addMonths(state.viewYear, state.viewMonth, i);
+        months.push({ y, m });
+      }
+      const { cols } = calculateStripLayout(measureMainWidth());
+      renderCalendarView(months, cols);
+    }
+
+    // 年视图：1 块，12 个月连续流，列数由 calculateStripLayout 决定（同季视图，跟随用户设置的星期数）
+    function renderYear() {
+      const months = [];
+      for (let m = 0; m < 12; m++) months.push({ y: state.viewYear, m });
+      const { cols } = calculateStripLayout(measureMainWidth());
+      renderCalendarView(months, cols);
+    }
+
     function renderCalendar() {
-      // v0.3.1：先按屏占比缩窄 main.panel，再算 cellSize（measureStripWidth/MonthWidth 读 .clientWidth）
+      // 先按全屏/屏占比缩窄 main.panel，再算 cellSize（measureMainWidth 读 .clientWidth）
       applyScreenRatio();
       if (state.viewMode === 'month') renderSingleMonth();
       else if (state.viewMode === 'quarter') renderQuarter();
@@ -1161,30 +1005,34 @@
     }
 
     // ========== UI 整体宽度（仅作用于 .ui-wrap 容器）==========
-    // v0.3.4：屏占比 5 档 → 全屏开关（on/off）
-    //   - 全屏 ON：UI 撑满 viewport - APP_MARGIN（原来 100% 屏占比）
-    //   - 全屏 OFF：UI 由 maxCellSize × 星期数 × 7 反推，刚好包住日历年历
-    //     main panel = maxCellSize × maxStripCols + gap × (maxStripCols - 1)
-    //     UI = sidebar + main + stats + padding + gaps（cellUiW 公式）
+    // v0.3.4+：全屏开关 + 日历宽度滑条
+    //   - 全屏 ON：UI 撑满 viewport - APP_MARGIN（满宽体验）
+    //   - 全屏 OFF：UI 由 state.calPanelWidth 决定（用户拖滑条或默认 cellUiW）
+    //     默认 mainW = maxCellSize × mainCols + gap × (mainCols - 1)
+    //     mainCols：月视图 7，季/年 = state.maxStripCols
     //
     // 影响因素清单：
     //   1. 全屏开关 state.fullscreen (true / false)
-    //      - true  →  UI = appW - APP_MARGIN × 2
-    //      - false →  UI = cellUiW（由 maxCellSize × weekCount × 7 反推，4k 大屏下缩到中间）
-    //   2. 方块大小上限 state.maxCellSize (40-200 px，默认 80)
-    //      - 所有视图通用 cap：月视图直接用，季/年视图在 calculateStripLayout 里截断
-    //      - UI 宽度下限：保证 cellSize*7 + gap*6 的 mainW 能放下
-    //   3. 星期数 state.maxStripCols / 7 (1-7，默认 5)
+    //      - true  →  UI = appW - APP_MARGIN × 2（满宽）
+    //      - false →  UI = SIDEBAR_W + mainW + STATS_W + PANEL_GAP×2 + UI_PAD×2
+    //   2. 日历面板宽度 state.calPanelWidth（滑条）
+    //      - null/0：使用 autoMainW（按 maxCellSize × mainCols 推算）
+    //      - 用户拖过：使用滑条值
+    //      - 滑条范围：7 × maxCellSize × 1.1 ~ appW × 0.7
+    //   3. 方块大小上限 state.maxCellSize (40-200 px，默认 80)
+    //      - 所有视图通用 cap（calcCellSize 里截断）
+    //      - 滑条 min 跟它走：maxCellSize 改了 min 也要更新
+    //   4. 星期数 state.maxStripCols / 7 (1-7，默认 5)
     //      - 季/年视图用：maxStripCols = weekCount × 7
-    //      - 全屏 OFF 时影响 UI 宽度（cellUiW 公式里的 maxCellSize × maxStripCols）
-    //   4. Sidebar / Stats 固定宽度 SIDEBAR_W / STATS_W (240 / 280)
-    //   5. .ui-wrap 内边距 PANEL_GAP / UI_PAD（panel 之间 8 + container padding 8）
-    //   6. APP_MARGIN = 16（UI 跟 .app 边缘的留白，强制留 16px 防止贴屏幕）
+    //      - 切换视图时 autoMainW 会变（mainCols 不同），滑条 value 也要更新
+    //   5. Sidebar / Stats 固定宽度 SIDEBAR_W / STATS_W (240 / 280)
+    //   6. .ui-wrap 内边距 PANEL_GAP / UI_PAD（panel 之间 8 + container padding 8）
+    //   7. APP_MARGIN = 16（UI 跟 .app 边缘的留白，强制留 16px 防止贴屏幕）
     //
     // 公式：
     //   fullscreen ON  →  uiW = appW - APP_MARGIN*2
-    //   fullscreen OFF →  cellUiW = SIDEBAR_W + maxCellSize*maxStripCols + GAP*(maxStripCols-1) + STATS_W + GAP*2 + UI_PAD*2
-    //                    uiW = cellUiW（季/年）；uiW = cellUiW with cols=7（月视图也走 cellUiW）
+    //   fullscreen OFF →  mainW = state.calPanelWidth || autoMainW
+    //                    uiW = SIDEBAR_W + mainW + STATS_W + PANEL_GAP*2 + UI_PAD*2
     //
     // 输出（应用 applyScreenRatio）：
     //   appW - APP_MARGIN*2 < MIN_UI_W → max-width = ''，太窄让响应式接管（堆叠）
@@ -1194,7 +1042,7 @@
     // 跟其他布局的关系：
     //   - 只设置 .ui-wrap.style.maxWidth，不动 sidebar/main/stats 内部布局
     //   - .app 是 flex 容器 + justify-content: center，max-width < .app 宽时自动居中
-    //   - main panel 内部 cellSize 算法独立（renderSingleMonth / calculateStripLayout 各自算）
+    //   - main panel 内部 cellSize 算法独立（calcCellSize / calculateStripLayout 各自算）
     const SIDEBAR_W   = 240;
     const STATS_W     = 280;
     const PANEL_GAP   = 8;       // .ui-wrap 内部 panel 间距
@@ -1205,7 +1053,7 @@
       const isPortrait = window.matchMedia
         ? window.matchMedia('(orientation: portrait)').matches
         : window.innerHeight > window.innerWidth;
-      // v0.3.4：竖屏强制全屏（窄屏本来就不能缩，关掉会让 UI 比屏还宽更难看）
+      // 竖屏强制全屏（窄屏本来就不能缩，关掉会让 UI 比屏还宽更难看）
       const fullscreen = isPortrait ? true : !!state.fullscreen;
       const maxCellSize = state.maxCellSize || 80;
       const maxStripCols = state.maxStripCols || DEFAULT_MAX_STRIP_COLS;
@@ -1213,21 +1061,25 @@
       // 全屏 UI：appW - 32（满宽，留 16px 边距）
       const fullUiW = appW - APP_MARGIN * 2;
 
-      // 非全屏 UI：cellUiW 公式（maxCellSize × maxStripCols 推 main panel，再 + sidebar + stats + padding + gaps）
-      // v0.3.4：月视图 main 固定 7 列（不是 maxStripCols），用 maxCellSize*7 + 6*gap
-      //         季/年视图 main 是 maxStripCols 列（strip 一行 weekCount 周 = maxStripCols 格）
+      // 非全屏 UI：mainW = state.calPanelWidth || autoMainW
+      //   - 月视图 mainCols = 7
+      //   - 季/年 mainCols = maxStripCols
+      //   - autoMainW = maxCellSize × mainCols + gap × (mainCols - 1)
+      //   - 滑条 min 跟 autoMainW 也有关：7*maxCellSize*1.1 ≈ 1 周大小 + 10% 余量
       const isMonth = state.viewMode === 'month';
-      const mainCols = isMonth ? 7 : maxStripCols;
-      const mainW = maxCellSize * mainCols + PANEL_GAP * (mainCols - 1);
-      const compactUiW = SIDEBAR_W
+      const autoMainCols = isMonth ? 7 : maxStripCols;
+      const autoMainW = maxCellSize * autoMainCols + PANEL_GAP * (autoMainCols - 1);
+      const mainW = state.calPanelWidth || autoMainW;
+      const userUiW = SIDEBAR_W
         + mainW
         + STATS_W
         + PANEL_GAP * 2
         + UI_PAD * 2;
 
       return {
-        uiW: fullscreen ? fullUiW : compactUiW,
-        fullUiW, compactUiW,
+        uiW: fullscreen ? fullUiW : userUiW,
+        fullUiW, userUiW,
+        autoMainW, mainW,
         fullscreen, maxCellSize, maxStripCols, appW
       };
     }
@@ -1244,9 +1096,41 @@
         return;
       }
       // 关键：永远留 APP_MARGIN 边距；算出来比可用宽度大就按可用宽度走
-      // （cellSize 在 renderSingleMonth 会自动按 main.panel.clientWidth 缩到 28px 下限）
+      // （cellSize 在 calcCellSize 会自动按 main.panel.clientWidth 缩到 20px 下限）
       const finalW = Math.min(uiW, appW - APP_MARGIN * 2);
       uiWrap.style.maxWidth = `${finalW}px`;
+    }
+
+    // v0.3.4+：日历宽度滑条 sync 助手（顶层函数，setViewMode / onResize / init 都会调）
+    // - min = 7 * maxCellSize * 1.1（一周大小 + 10% 余量）
+    // - max = window.innerWidth * 0.7
+    // - value = state.calPanelWidth || autoMainW（用户没拖过滑条就用自动算的）
+    // - 全屏 ON 时 disabled
+    function getSliderRange() {
+      const maxCellSize = state.maxCellSize || 80;
+      const min = Math.round(7 * maxCellSize * 1.1);
+      const max = Math.round(window.innerWidth * 0.7);
+      // 极窄屏兜底：保证 min < max
+      return { min, max: Math.max(max, min + 10) };
+    }
+    function getSliderValue() {
+      if (state.calPanelWidth) return state.calPanelWidth;
+      // autoMainW：按当前视图/星期数/方块上限算
+      const isMonth = state.viewMode === 'month';
+      const maxStripCols = state.maxStripCols || DEFAULT_MAX_STRIP_COLS;
+      const autoMainCols = isMonth ? 7 : maxStripCols;
+      const maxCellSize = state.maxCellSize || 80;
+      return maxCellSize * autoMainCols + PANEL_GAP * (autoMainCols - 1);
+    }
+    function syncCalWidthSlider() {
+      const el = document.getElementById('cal-width-input');
+      if (!el) return;
+      const { min, max } = getSliderRange();
+      const value = getSliderValue();
+      el.min = min;
+      el.max = max;
+      el.value = Math.min(Math.max(value, min), max);
+      el.disabled = !!state.fullscreen;
     }
 
     // ========== Render: Stats ==========
@@ -1376,6 +1260,8 @@
       }
       state.viewMode = mode;
       saveState();
+      // 视图变了 → mainCols 变了（季/年走 maxStripCols，月走 7）→ 滑条 autoMainW 变了
+      syncCalWidthSlider();
       renderAll();
     }
     function openModal() {
@@ -1410,10 +1296,12 @@
 
       // 视口缩放时重算布局（季/年视图列数和格子大小、月视图字号、屏占比 main.panel 宽度）
       // v0.3.2：orientationchange 同步触发（竖横屏切换时屏占比 100% / 自适应立即生效）
+      // v0.3.4+：滑条 max = window.innerWidth * 0.7，resize 时也要更新
       let _resizeTimer = null;
       const onResize = () => {
         clearTimeout(_resizeTimer);
         _resizeTimer = setTimeout(() => {
+          syncCalWidthSlider();
           renderCalendar();
         }, 100);
       };
@@ -1434,11 +1322,15 @@
       const maxColsInput = document.getElementById('max-cols-input');
       const maxCellInput = document.getElementById('max-cell-input');
       const fullscreenInput = document.getElementById('fullscreen-input');
+      const calWidthInput = document.getElementById('cal-width-input');
       // 星期数 input：用户输入 1-7 整数，state 存对应的 7 的倍数（1=7, 5=35, 7=49）
       maxColsInput.value = state.maxStripCols / 7;
       maxCellInput.value = state.maxCellSize;
       // 全屏 checkbox
       fullscreenInput.checked = !!state.fullscreen;
+      // v0.3.4+：滑条 sync 助手 —— 任何 state 变了都调一下同步 min/max/value/disabled
+      // （syncCalWidthSlider 已经在 applyScreenRatio 之后定义成顶层函数）
+      syncCalWidthSlider();
       settingsBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         settingsMenu.classList.toggle('hidden');
@@ -1456,9 +1348,9 @@
         maxColsInput.value = v;
         state.maxStripCols = v * 7;
         saveState();
-        if (state.viewMode !== 'month') renderCalendar();
-        // 星期数影响非全屏 UI 宽度（cellUiW 公式），强制重渲
-        if (!state.fullscreen) renderCalendar();
+        // 星期数变了 → autoMainW 变了（季/年视图）→ 滑条 value 要更新
+        syncCalWidthSlider();
+        renderCalendar();
       });
       maxCellInput.addEventListener('change', () => {
         // v0.3.4：方块大小上限（40-200 px），所有视图通用 cap
@@ -1468,15 +1360,26 @@
         maxCellInput.value = v;
         state.maxCellSize = v;
         saveState();
-        // 方块上限影响 UI 整体宽度（applyScreenRatio）+ 季/年 cellSize 截断，任何视图都重渲
+        // 方块上限变了 → 滑条 min（7*maxCellSize*1.1）要更新
+        syncCalWidthSlider();
         renderCalendar();
       });
       fullscreenInput.addEventListener('change', () => {
         // v0.3.4：全屏开关
         state.fullscreen = fullscreenInput.checked;
         saveState();
-        // 全屏切换影响 UI 整体宽度（applyScreenRatio），任何视图都重渲
+        // 全屏切换 → 滑条 enabled/disabled 切换
+        syncCalWidthSlider();
         renderCalendar();
+      });
+      calWidthInput.addEventListener('input', () => {
+        // v0.3.4+：拖动滑条 → 更新 state.calPanelWidth，重新算 UI 宽度 + cellSize
+        const v = parseInt(calWidthInput.value, 10);
+        if (!isNaN(v) && v > 0) {
+          state.calPanelWidth = v;
+          saveState();
+          renderCalendar();
+        }
       });
 
       document.getElementById('add-project').addEventListener('click', openModal);
