@@ -218,7 +218,7 @@
       color: var(--text);
     }
     .settings-row input[type="number"] {
-      width: 70px;
+      width: 100px;
       padding: 4px 8px;
       border: 1px solid var(--border);
       border-radius: 4px;
@@ -229,7 +229,7 @@
     }
     .settings-row input[type="number"]:focus { border-color: var(--accent); }
     .settings-row select {
-      width: 90px;
+      width: 100px;
       padding: 4px 8px;
       border: 1px solid var(--border);
       border-radius: 4px;
@@ -330,8 +330,7 @@
       display: flex;
       flex-direction: column;
       gap: 18px;
-      /* 屏占比由 JS 内联 max-width 控制（state.screenRatio * panel width） */
-      margin: 0 auto;
+      /* 屏占比由 main.panel 整体缩窄控制（v0.3.1 起），strip 内部直接 stretch 到 panel */
     }
     .weekday-row {
       display: grid;
@@ -340,11 +339,8 @@
       color: var(--text-soft);
       text-align: center;
       margin-bottom: 3px;
-      /* 屏占比 < 1 时：让 grid 只占实际需要的宽度（cols*cellSize），居中显示 */
-      width: fit-content;
-      max-width: 100%;
-      margin-left: auto;
-      margin-right: auto;
+      /* stretch 到 main.panel 宽度（v0.3.1 起），跟 day-strip 严格列对齐 */
+      width: 100%;
     }
     .weekday-row span { padding: 1px 0; }
     .weekday-row span.wkn { color: #ef4444; }
@@ -353,10 +349,7 @@
       display: grid;
       /* grid-template-columns 和 font-size 由 JS 根据视口动态算 */
       gap: 2px;
-      width: fit-content;
-      max-width: 100%;
-      margin-left: auto;
-      margin-right: auto;
+      width: 100%;
     }
     .strip-day {
       /* 正方形：宽 = 网格列宽 = 网格列宽，aspect-ratio 强制高 = 宽 */
@@ -535,7 +528,7 @@
                 <option value="0.5">50%</option>
               </select>
             </label>
-            <p class="settings-hint">7 的倍数，41–49 之间效果最佳</p>
+            <p class="settings-hint">列数 21–28（cellSize 41–49px）效果最佳</p>
           </div>
         </div>
       </div>
@@ -1057,9 +1050,57 @@
     }
 
     function renderCalendar() {
+      // v0.3.1：先按屏占比缩窄 main.panel，再算 cellSize（measureStripWidth/MonthWidth 读 .clientWidth）
+      applyScreenRatio();
       if (state.viewMode === 'month') renderSingleMonth();
       else if (state.viewMode === 'quarter') renderQuarter();
       else if (state.viewMode === 'year') renderYear();
+    }
+
+    // v0.3.1：屏占比反向限制 main.panel 整体宽度
+    //  - ratio = 1.0：清除 inline，恢复默认 grid (240px 1fr 280px)
+    //  - ratio < 1：直接改 .app 的 grid-template-columns，把 1fr 换成精确 px 宽度
+    //    这样 sidebar / stats 始终贴两侧固定 240 / 280，main 列 = frWidth * ratio
+    //    main panel 内部再 margin auto 居中（在它自己的列里）。月视图 4k 下格子太大、季/年视图填充过满，都靠 main.panel 缩窄解决。
+    // 之前（v0.3.0）的实现是给 main.panel 加 max-width + margin auto，但 .app 的 1fr 会被 sidebar/stats
+    // 挤压到几乎 0（窄窗口 + 屏占比 < 1 时），main panel 直接消失 —— 改 .app grid 才能彻底控住。
+    function applyScreenRatio() {
+      const main = document.querySelector('main.panel');
+      const app = main && main.parentElement;
+      if (!main || !app) return;
+      const ratio = state.screenRatio || 1.0;
+
+      if (ratio >= 1.0) {
+        // 恢复默认 grid + 清除 main panel inline
+        app.style.gridTemplateColumns = '';
+        main.style.maxWidth = '';
+        main.style.marginLeft = '';
+        main.style.marginRight = '';
+        return;
+      }
+
+      // 屏占比 < 1：算 1fr 理论宽度（父容器 .app 宽 - sidebar 240 - stats 280 - 两个 gap 16 - 两个 padding 16）
+      const appWidth = app.clientWidth;
+      const SIDEBAR_W = 240, STATS_W = 280, GAP = 16, APP_PAD = 16 * 2;
+      let frWidth = appWidth - SIDEBAR_W - STATS_W - GAP * 2 - APP_PAD;
+      // v0.3.1 兜底：窗口太窄（frWidth < 1024）时屏占比失效，强制 100%
+      // 否则 800px 窗口 + 屏占比 75% → mainW=168px → 季/年视图被压垮
+      // 屏占比本来就是给 2k/4k 大屏设计的，窄屏本来就不需要缩
+      if (frWidth < 1024) {
+        app.style.gridTemplateColumns = '';
+        main.style.maxWidth = '';
+        main.style.marginLeft = '';
+        main.style.marginRight = '';
+        return;
+      }
+      const mainW = Math.floor(frWidth * ratio);
+
+      // 直接改 .app 的 grid template columns：精确三列，sidebar/stats 不动
+      app.style.gridTemplateColumns = `${SIDEBAR_W}px ${mainW}px ${STATS_W}px`;
+      // main panel 自己也加 max-width 兜底（防止某些情况下 grid 1fr 又被挤压）+ 内部内容居中
+      main.style.maxWidth = `${mainW}px`;
+      main.style.marginLeft = 'auto';
+      main.style.marginRight = 'auto';
     }
 
     // ========== Render: Stats ==========
@@ -1221,7 +1262,7 @@
       renderColorPicker();
       renderAll();
 
-      // 视口缩放时重算布局（季/年视图列数和格子大小、月视图字号）
+      // 视口缩放时重算布局（季/年视图列数和格子大小、月视图字号、屏占比 main.panel 宽度）
       let _resizeTimer = null;
       window.addEventListener('resize', () => {
         clearTimeout(_resizeTimer);

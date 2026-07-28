@@ -1,5 +1,48 @@
 # Changelog
 
+## v0.3.1 — 2026-07-28
+
+**屏占比反向限制 main.panel + 日期格子和星期几严格对齐 + 选项框宽度一致**
+
+四个收尾项，跟 v0.3.0 收尾项呼应：v0.3.0 给了"屏占比"开关但语义有偏差，本版本把语义修正成"反向控制 main panel 整体宽度"，同时修了 4k 下 grid 列对齐的问题。
+
+**1. 屏占比反向限制 main.panel 整体宽度（v0.3.0 实现的实际只缩了 cellSize 算法）：**
+- v0.3.0 屏占比只缩了 `calculateStripLayout(measureStripWidth() * ratio)`，main.panel 仍 100% 占满，sidebar/stats 跟着贴两侧，**视觉上没真正变窄**。
+- v0.3.1 改成：屏占比 < 1 时，**直接改 `.app` 的 `grid-template-columns`**，把 1fr 列换成精确 px 宽度（`frWidth * ratio`），sidebar/stats 固定 240/280 不动，main 列 = `frWidth * ratio`。
+- 同时给 main.panel 加 `max-width: mainW` + `margin: 0 auto` 兜底（防止某些场景 grid 1fr 又被挤压）+ 内部内容居中。
+- 100% 屏占比：清除 inline，恢复默认 `240px 1fr 280px`，行为不变。
+- 月视图 4k 下格子太大：**自动解决**。屏占比生效时 main panel 缩，月视图 cellSize 按缩小后的 main panel 算，格子不会爆。
+
+**2. 日期格子和星期几严格对齐（4k 尤为明显）：**
+- v0.3.0 给 `.weekday-row` / `.day-strip` 加了 `width: fit-content; max-width: 100%; margin-left/right: auto`，grid 容器自己按内容算宽度。
+- 理论上两 grid 列数 + cellSize 一致应该 align，但 `.strip-wrap` 仍 100% 父容器 + box-sizing 差异 + content-box vs border-box 在某些场景（4k 大屏）会失效。
+- v0.3.1 改成 `width: 100%`，两个 grid 都 stretch 到 main.panel 宽度，列严格对齐（v0.2.5 的行为）。
+- 实测 100% 屏占比 + 14 列：weekday "日 一 二 三 四 五 六" 跟下面 7 个日期格的列边界完全重合，4k 大屏也保证对齐。
+
+**3. 窄窗口屏占比失效保护：**
+- 屏占比本来就是给 2k/4k 大屏设计的，窄窗口（如 800px）下应用屏占比会把 main panel 压到 ~100px，季/年视图直接崩。
+- v0.3.1 加 `if (frWidth < 1024) return;` —— 窗口太窄时屏占比强制当 100% 处理，main panel 默认 1fr 全宽。
+- 4k 屏（frWidth ≈ 3256）下屏占比 75% / 50% 正常工作；1080p 半屏（frWidth ≈ 700）下屏占比失效保护生效。
+
+**4. 设置选项框宽度一致 + 提示文字改：**
+- `.settings-row input[type=number]` 宽度 70px → **100px**（跟 select 一致）。
+- 提示文字「7 的倍数，41–49 之间效果最佳」→「**列数 21–28（cellSize 41–49px）效果最佳**」：21-28 是推荐列数（3-4 周/行），cellSize 41-49px 是其对应的格子边长。
+
+**实现细节：**
+- `applyScreenRatio()` 函数在 `renderCalendar()` 入口先调用，resize 监听器也会触发。
+- 算法：`frWidth = appWidth - 240 - 280 - 32 - 32`（sidebar + stats + 2 gap + 2 padding）；`mainW = floor(frWidth * ratio)`。
+- `.app` 的 `grid-template-columns` 用 inline style 覆盖，100% 时清除让 CSS 默认生效。
+- main panel 同时设 `max-width` + `margin auto` 兜底。
+
+**保持不变：**
+- 数据结构、storage key `count_calendar_v2`、点击循环、统计、a11y。
+- 季/年视图的跨月不跳星期、周末红色。
+- 4k 解锁（v0.2.5 已删 `.app { max-width }`）。
+- strip 字号算法（v0.3.0 的 0.5/0.4）、徽章阈值（v0.3.0 的 cellSize >= 56）。
+- 月视图字号 CSS 写死（v0.3.0 的 14/14/10）。
+
+---
+
 ## v0.3.0 — 2026-07-28
 
 **字体算法拆分 + 屏占比设置 + 徽章阈值改公式**
