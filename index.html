@@ -1068,13 +1068,17 @@
       else if (state.viewMode === 'year') renderYear();
     }
 
-    // v0.3.1：屏占比反向限制 main.panel 整体宽度
-    //  - ratio = 1.0：清除 inline，恢复默认 grid (240px 1fr 280px)
-    //  - ratio < 1：直接改 .app 的 grid-template-columns，把 1fr 换成精确 px 宽度
-    //    这样 sidebar / stats 始终贴两侧固定 240 / 280，main 列 = frWidth * ratio
-    //    main panel 内部再 margin auto 居中（在它自己的列里）。月视图 4k 下格子太大、季/年视图填充过满，都靠 main.panel 缩窄解决。
-    // 之前（v0.3.0）的实现是给 main.panel 加 max-width + margin auto，但 .app 的 1fr 会被 sidebar/stats
-    // 挤压到几乎 0（窄窗口 + 屏占比 < 1 时），main panel 直接消失 —— 改 .app grid 才能彻底控住。
+    // v0.3.2 重做：屏占比反向限制 main.panel 居中宽度
+    //  - **关键决策：不改 .app 的 grid-template-columns**（v0.3.1 的错误）
+    //  - ratio = 1.0：清除 main panel inline，.app grid 默认 `240px 1fr 280px` 让 main 占满 1fr
+    //  - ratio < 1：只给 main panel 加 max-width + margin auto，main 在自己的 1fr 列内居中
+    //    sidebar / stats 仍贴 .app 两侧（grid 1fr 行为不变），main panel 居中且按 ratio 缩
+    //    1fr 列内 main panel 左右的空白属于 .app 背景（不是 stats 旁的"未用空间"）
+    // 之前 v0.3.1 改 .app grid-template-columns: 240px mainWpx 280px —— 3 panel 总宽 < .app 宽，
+    // 多余空间堆在 stats 右边，stats 离屏幕右边远了，看着像"屏占比对整个 body 都生效"。
+    // 之前 v0.3.0 给 main panel 加 max-width + margin auto，1fr 默认填满——4k 屏下 main 居中缩小，
+    // 但 sidebar / stats 紧贴屏幕边缘，**正确**。v0.3.1 反而把 v0.3.0 改坏了。
+    // 这次回归 v0.3.0 思路 + 加窗口兜底（frWidth < 1024 失效）+ 竖屏强制 100%。
     // v0.3.2：竖屏时屏占比强制 1.0（CSS 同时也隐藏了 .screen-ratio-row），因为竖屏下 main panel 本来就窄，再缩就崩。
     function applyScreenRatio() {
       const main = document.querySelector('main.panel');
@@ -1087,8 +1091,7 @@
       const ratio = isPortrait ? 1.0 : (state.screenRatio || 1.0);
 
       if (ratio >= 1.0) {
-        // 恢复默认 grid + 清除 main panel inline
-        app.style.gridTemplateColumns = '';
+        // 100%：清除 main panel inline，.app grid 默认行为让 main 占满 1fr
         main.style.maxWidth = '';
         main.style.marginLeft = '';
         main.style.marginRight = '';
@@ -1098,12 +1101,11 @@
       // 屏占比 < 1：算 1fr 理论宽度（父容器 .app 宽 - sidebar 240 - stats 280 - 两个 gap 8 - 两个 padding 8）
       const appWidth = app.clientWidth;
       const SIDEBAR_W = 240, STATS_W = 280, GAP = 8, APP_PAD = 8 * 2;
-      let frWidth = appWidth - SIDEBAR_W - STATS_W - GAP * 2 - APP_PAD;
-      // v0.3.1 兜底：窗口太窄（frWidth < 1024）时屏占比失效，强制 100%
+      const frWidth = appWidth - SIDEBAR_W - STATS_W - GAP * 2 - APP_PAD;
+      // 窗口太窄（frWidth < 1024）时屏占比失效，强制 100%
       // 否则 800px 窗口 + 屏占比 75% → mainW=168px → 季/年视图被压垮
       // 屏占比本来就是给 2k/4k 大屏设计的，窄屏本来就不需要缩
       if (frWidth < 1024) {
-        app.style.gridTemplateColumns = '';
         main.style.maxWidth = '';
         main.style.marginLeft = '';
         main.style.marginRight = '';
@@ -1111,9 +1113,8 @@
       }
       const mainW = Math.floor(frWidth * ratio);
 
-      // 直接改 .app 的 grid template columns：精确三列，sidebar/stats 不动
-      app.style.gridTemplateColumns = `${SIDEBAR_W}px ${mainW}px ${STATS_W}px`;
-      // main panel 自己也加 max-width 兜底（防止某些情况下 grid 1fr 又被挤压）+ 内部内容居中
+      // 给 main panel 加 max-width + margin auto，main 在 1fr 列内居中
+      // .app grid 保持默认 240px 1fr 280px，sidebar / stats 仍紧贴 .app 两侧
       main.style.maxWidth = `${mainW}px`;
       main.style.marginLeft = 'auto';
       main.style.marginRight = 'auto';
