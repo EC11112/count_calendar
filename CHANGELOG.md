@@ -1,5 +1,29 @@
 # Changelog
 
+## v0.3.8 — 2026-07-28
+
+**工时类项目日合计上限校验 (≤ 1.0 天)**
+
+新加的工时/非工时分类用起来发现一个数据完整性问题:工时类项目每天的"半天/整天"总和不限制,可以一天给 3 个项目各 0.5 天 = 1.5 天,显然不符合"一天 8 小时"的现实。加一个点击校验。
+
+- 仅对工时类 (kind='hours') 项目生效;非工时类不受限 (健身天数就是天数,允许一天 3 个)
+- 校验公式: `其他工时类项目当日的合计 + 即将添加的值 > 1.0` 即阻止
+  - 半天 = 0.5, 整天 = 1.0
+  - "其他" = state 里所有 hours-kind 项目 (含隐藏的) 减去 active project
+  - 减少 (next=0) 不校验,只阻止"加"和"加量"
+- 阻止时:不写 state,顶部居中淡入一条红色 toast,2.5s 自动消失
+- toast 短时间连发时,新消息会取消上一轮的 timer 重新计时
+- toast 是 fixed + pointer-events: none,不阻挡日历交互
+- 历史数据不受影响 (老数据里已经有超 1 天的不会去清理,只防新增)
+
+新增 / 改动:
+- CSS: `.toast`, `.toast.show`, `.toast.warn`
+- HTML: `<div id="toast" class="toast" role="status" aria-live="polite">`
+- JS: `getDayHoursTotal(ds, excludeProjId)`, `formatHoursDecimal(v)`, `showToast(msg, type)`
+- `buildCalCell` click handler: 加 4 行校验块
+
+---
+
 ## v0.3.7 — 2026-07-28
 
 **Q1 移动按钮 + Q2 项目分类 + Q3 眼按钮修复**

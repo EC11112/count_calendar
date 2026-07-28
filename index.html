@@ -292,6 +292,36 @@
       min-width: 220px;
     }
     .settings-menu.hidden { display: none; }
+    /* v0.3.8：工时校验提示 toast
+       - 工时类项目点击触发"日合计超 1 天"时,顶部居中淡入一个短提示,2.5s 自动消失
+       - 不阻挡交互 (pointer-events: none) */
+    .toast {
+      position: fixed;
+      top: 24px;
+      left: 50%;
+      transform: translateX(-50%) translateY(-8px);
+      background: rgba(17, 24, 39, 0.92);
+      color: #fff;
+      padding: 10px 18px;
+      border-radius: 8px;
+      font-size: 13px;
+      font-weight: 500;
+      box-shadow: 0 6px 20px rgba(0, 0, 0, 0.18);
+      z-index: 200;
+      pointer-events: none;
+      opacity: 0;
+      transition: opacity 0.2s ease, transform 0.2s ease;
+      max-width: 360px;
+      text-align: center;
+      line-height: 1.4;
+    }
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+    .toast.warn {
+      background: rgba(220, 38, 38, 0.94);
+    }
     /* v0.3.3：设置菜单对齐统一
        - label flex: 1 1 auto，左对齐，撑满左侧
        - input/select 固定 80px + margin-left: auto，右对齐，永远贴右
@@ -718,6 +748,9 @@
     </div>
   </div>
 
+  <!-- v0.3.8：通用 toast 提示 (工时校验等一次性反馈) -->
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
   <script>
     'use strict';
 
@@ -922,6 +955,20 @@
     }
     function getClicks(projectId, ds) {
       return (state.logs[projectId] || {})[ds] || 0;
+    }
+    // v0.3.8：计算某日工时类项目合计 (跨所有 hours-kind 项目,不论 visible)
+    // 半天 = 0.5, 整天 = 1.0; 非工时类不计入
+    // excludeProjId 可选: 用于"换算到当前点击之后"时把 active project 当前贡献排除掉
+    function getDayHoursTotal(ds, excludeProjId) {
+      let total = 0;
+      state.projects.forEach(p => {
+        if (p.kind !== 'hours') return;
+        if (excludeProjId && p.id === excludeProjId) return;
+        const c = getClicks(p.id, ds);
+        if (c === 1) total += 0.5;
+        else if (c === 2) total += 1.0;
+      });
+      return total;
     }
     function setClicks(projectId, ds, clicks) {
       if (!state.logs[projectId]) state.logs[projectId] = {};
@@ -1177,12 +1224,27 @@
       // 所以这里也兼容 active project 是 hidden 的情况
       // v0.3.6：editMode 关闭时(只读)不绑 click handler,避免误触
       // v0.3.7：按 active project 的 kind 决定 cycle —— 工时类 0→半→整→0 (mod 3),非工时类 0→√→0 (mod 2)
+      // v0.3.8：工时类项目校验"日合计 <= 1.0 天" —— 你不可能一天给 3 个项目干 0.5 天
+      //   半天 = 0.5, 整天 = 1.0; 若 next 应用后跨项目合计 > 1.0 则阻止并 toast
       const activeProj = getProject(state.currentProjectId);
       if (state.editMode && activeProj && ds <= todayKey) {
         cell.addEventListener('click', () => {
           const cur = getClicks(activeProj.id, ds);
           const modulo = (activeProj.kind === 'days') ? 2 : 3;
           const next = (cur + 1) % modulo;
+          // v0.3.8：工时类校验
+          if (activeProj.kind === 'hours' && (next === 1 || next === 2)) {
+            const newValue = (next === 1) ? 0.5 : 1.0;
+            const otherTotal = getDayHoursTotal(ds, activeProj.id);
+            if (otherTotal + newValue > 1.0) {
+              const used = otherTotal + (cur === 1 ? 0.5 : (cur === 2 ? 1.0 : 0));
+              showToast(
+                `当天工时类项目已占 ${formatHoursDecimal(used)} 天 (含当前项目),无法再添${next === 1 ? '半天' : '整天'}`,
+                'warn'
+              );
+              return;
+            }
+          }
           setClicks(activeProj.id, ds, next);
           renderCalendar();
           renderStats();
@@ -1406,6 +1468,29 @@
       if (sum.days > 0) parts.push(`${sum.days} 整天`);
       if (sum.half > 0) parts.push(`${sum.half} 半天`);
       return parts.length > 0 ? parts.join(' · ') : '0';
+    }
+    // v0.3.8：把工时类"天"小数值格式化为"X 天"或"X.X 天" (用于 toast 提示)
+    function formatHoursDecimal(v) {
+      return Number.isInteger(v) ? `${v}` : v.toFixed(1);
+    }
+    // v0.3.8：通用 toast —— 工时校验等一次性反馈
+    // 同一个 toast 短时间连发时,取消上一轮的 timer,新消息会重新计时
+    let _toastTimer = null;
+    function showToast(msg, type) {
+      const el = document.getElementById('toast');
+      if (!el) return;
+      el.textContent = msg;
+      el.classList.remove('warn');
+      if (type === 'warn') el.classList.add('warn');
+      // 强制重排,保证连续触发时 transition 重新跑
+      el.classList.remove('show');
+      // eslint-disable-next-line no-unused-expressions
+      el.offsetHeight;
+      el.classList.add('show');
+      if (_toastTimer) clearTimeout(_toastTimer);
+      _toastTimer = setTimeout(() => {
+        el.classList.remove('show');
+      }, 2500);
     }
     function renderStats() {
       const visibleProjects = getVisibleProjects();
