@@ -1,5 +1,80 @@
 # Changelog
 
+## v0.3.5 — 2026-07-28
+
+**多项目显隐 + 同日多项目显示**
+
+v0.3.4 修完布局问题后,真正"一个应用"的感觉还需要两件事:
+- **多项目同一天**: 现在 1 天 1 个项目只能选 1 个状态(0/半/整),实际生活一天会干多件事(学习半天 + 运动半天)
+- **临时屏蔽项目**: 阶段性只想看 1-2 个项目的趋势,但又不想删数据(以后还要看)
+
+这次加上显隐切换 + 同日多项目色条显示。
+
+---
+
+**1. 项目显隐按钮(eye)**
+
+- sidebar 每个项目名右边加 eye 按钮:
+  - **实心 ●** = visible,日历/统计都算
+  - **空心 ○** = hidden,只在 sidebar 显示(灰显 + 删除线),日历/统计不算
+- eye 按钮默认 **hover sidebar 项目才显示**,避免视觉噪音
+- hidden 项目的 eye **永远显示**(opacity 0.5),让用户能恢复显示
+- 显隐切换 **不删数据**(`p.visible` 字段独立,logs 保留),以后想恢复随时恢复
+- 1 个项目也能用,做"专注模式"很方便
+
+**2. 同日多项目:垂直分段色条**
+
+- 1 天有 2+ 项目有 log 时,cell 切到 **N 等分垂直色条**模式:
+  - 每个项目保留自己原色,**不做 RGB 混合**(混合会变脏)
+  - 整天 = 0.85 alpha,半天 = 0.4 alpha
+  - N 等分宽度,left = `i × w`,width = `w`(用 `.toFixed(4)` 避免浮点误差)
+- 数字/徽章 z-index 提到色条之上(2 vs 1),加 text-shadow,彩色背景上仍清晰
+- hover cell 弹 native tooltip,格式 `项目A·整天 · 项目B·半天 · ...`
+- 1 个项目: 跟之前一样,整格实色/半色
+- 0 个项目: 空白格
+
+**3. 统计按可见项目聚合 + 多项目小计**
+
+- `stats` 标题:
+  - 0 visible + 0 项目: "先在左侧建一个项目 👈"
+  - 0 visible + 部分 hidden: "所有项目都已隐藏,显示一个看看 👁"
+  - 1 visible: 显示该项目的颜色 + 名字(像专项统计)
+  - 2+ visible: "统计 · N 个项目"
+- 2+ visible 时,本月 card 下加 **`.stat-breakdown`**: 列出每个可见项目的 subtotal(色点 + 名字 + 天数)
+- 总计/折合小时基于 visible projects 所有 logs(不受视图范围限制)
+
+**4. 代码改动**
+
+- `state.projects[i]` 新增 `visible` 字段(默认 true)
+- 老数据 migration: `p.visible === undefined` → `p.visible = true`
+- 新建项目: `{ id, name, color, visible: true }`
+- 新增 `getVisibleProjects()` helper(过滤 `visible !== false`)
+- 新增 `getLogsInRange()`(按视图范围合并 visible projects logs)和 `getAllLogs()`(全部 visible logs)
+- `buildCalCell` 重写: N=0/N=1/N≥2 三分支,`data-clicks` 改为 N=2+ 时用逗号分隔
+- `renderStats` 改用 visible projects
+- `renderProjects` 加 eye 按钮 + click handler(`stopPropagation` 防止冒泡到 li)
+- `setClicks` / 单击 cell 仍只 toggle active project 的 log(active 可能是 hidden,兼容)
+
+**5. CSS**
+
+- `.project-item.hidden-project .name` — `text-decoration: line-through` + 灰
+- `.project-item.hidden-project .dot` — opacity 0.35
+- `.project-item .eye` — `visibility: hidden`,hover 显示
+- `.project-item.hidden-project .eye` — `visibility: visible; opacity: 0.5` (永远显示)
+- `.cal-cell-bar` — `position: absolute; top: 0; bottom: 0; z-index: 1; pointer-events: none`
+- `.cal-cell-num` — 加 `z-index: 2` + `text-shadow: 0 0 3px rgba(255,255,255,0.85), 0 0 1px rgba(255,255,255,0.95)`
+- `.cal-cell-badge` — `z-index: 2`
+- `.stat-breakdown` — `margin-top: 8px; padding-top: 8px; border-top: dashed`,flex column
+- `.stat-breakdown-row` — flex row,dot 8px,name flex 1,val 灰
+
+**6. 已知 trade-off / 后续可优化**
+
+- 单击 cell 仍只 toggle **active project** 的 log(多项目编辑 UI 比较复杂,留到后面)
+  - 临时方案: 想加多项目 log 时,先点 sidebar 切 active project,再点 cell
+- 颜色选择器默认 8 色,需要更多可后续加 color picker
+
+---
+
 ## v0.3.4++ — 2026-07-28
 
 **提示和默认值 polish**
