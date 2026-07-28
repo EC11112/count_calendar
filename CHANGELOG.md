@@ -1,5 +1,54 @@
 # Changelog
 
+## v0.3.4 — 2026-07-28
+
+**方块大小上限全局化 + 屏占比换成全屏开关**
+
+v0.3.3 第二波后又发现 2 个收尾问题：
+- 100% 屏占比 + 星期数=1 时，季/年视图的 cellSize 不受 maxCellSize 限制（4k 大屏 + maxStripCols=7 → cellSize 算到 400+）
+- 屏占比 5 档（100/83/75/66/50%）语义太阴间，用户搞不清楚每档差别，配置全屏与否直接用 on/off 就行
+
+**1. 方块大小上限 (`maxCellSize`) 应用到所有视图：**
+- 之前只在月视图截断 `cellSize`：`cellSize = min(rawCell, maxCellSize)`
+- 季/年视图 `calculateStripLayout` 没截断 → 星期数=1 + 4k 屏 = cellSize 400+
+- 修复：`calculateStripLayout` 加 `const cellSizeCap = state.maxCellSize || 80`，循环里 `cellSize = Math.min(raw, cellSizeCap)`
+- 极端窄屏 fallback 不截（避免 cellSize 算成 < 20）
+
+**2. 「月视图格子上限」→「方块大小上限」+ tooltip 改：**
+- 旧 tooltip：月视图单个日期块的最大边长
+- 新 tooltip：所有视图（月/季/年）日期块的最大边长，4k 大屏下防止格子过大，季/年视图也会按这个值截断 cellSize
+
+**3. 屏占比 5 档 select → 单 checkbox「全屏」开关：**
+- 旧 5 档语义不直观：100/83/75/66/50% 谁记得住比例
+- 改成单一 checkbox，开/关二选一：
+  - **开**（默认）：UI 撑满 viewport - 32
+  - **关**：UI 由 `maxCellSize × 星期数 × 7` 反推，刚好包住日历年历
+- 4k 大屏 + 星期数=5 + maxCellSize=80：UI = sidebar(240) + main(80×35+8×34=3072) + stats(280) + gaps/padding(32) = 3624
+  - 全屏开：UI = 3808（满宽）
+  - 全屏关：UI = 3624（缩了 184px，4k 屏下能看出差别）
+- 4k 屏 + 星期数=1 + maxCellSize=80：UI = 240 + (80×7+8×6) + 280 + 32 = 1160
+  - 全屏开：UI = 3808
+  - 全屏关：UI = 1160（缩了 2648px，差异巨大 —— 这就是 100% 屏占比 + 星期数=1 看起来浪费的根因）
+- 竖屏强制全屏（窄屏关掉会让 UI 比屏还宽更难看）
+
+**4. state migration：**
+- 旧 `state.screenRatio` (1.0/0.83/0.75/0.66/0.5) → 新 `state.fullscreen` (true/false)
+- 旧值=1.0 → fullscreen=true（保持满宽体验）
+- 旧值<1.0 → fullscreen=false（关全屏）
+- migration 后 `delete state.screenRatio` 防止重复 migration
+
+**5. CSS：**
+- 加 `.settings-row input[type="checkbox"]` 样式：20×20px，accent-color 用主色，margin-left: auto 贴右对齐（跟 input/select 视觉一致）
+- 竖屏下 `.screen-ratio-row` 仍然隐藏（强制全屏没意义给用户配置）
+
+**保持不变：**
+- 数据结构（除 fullscreen 替换 screenRatio）、storage key `count_calendar_v2`、点击循环、统计、a11y
+- 4k 解锁、季/年 strip 跨月不跳星期、strip 居中（v0.3.3 的 justify-content: center）
+- 月视图字号 CSS 写死、strip 字号算法 0.5/0.4 + cap 28/18、徽章阈值 cellSize ≥ 56
+- 竖屏堆叠、min-width: 0 解决 flex 撑破
+
+---
+
 ## v0.3.3 — 2026-07-28
 
 **两波 bug 修复 + 4 个收尾改进**

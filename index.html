@@ -39,7 +39,7 @@
       /* 不再 max-width: 1400px —— 4k 屏下被锁死，2k+ 大屏体验不到自适应 */
     }
     /* v0.3.2：把 3 panel（sidebar / main / stats）包进 .ui-wrap 容器，
-       UI 整体宽度由 applyScreenRatio 算（屏占比 + 月视图 maxCellSize），
+       UI 整体宽度由 applyScreenRatio 算（全屏开关 + 方块大小上限），
        max-width + .app flex 居中，让 UI 居中，左右两侧空白是 .app 背景
 
        关键：min-width: 0 必须有，否则 .ui-wrap 作为 flex item 默认 min-width: auto = min-content，
@@ -233,7 +233,8 @@
     /* v0.3.3：设置菜单对齐统一
        - label flex: 1 1 auto，左对齐，撑满左侧
        - input/select 固定 80px + margin-left: auto，右对齐，永远贴右
-       - 所有行 label 起点和组件终点一致，视觉整齐 */
+       - 所有行 label 起点和组件终点一致，视觉整齐
+       v0.3.4：加 checkbox 样式，全屏开关贴右对齐 */
     .settings-row {
       display: flex;
       align-items: center;
@@ -262,6 +263,14 @@
       text-align: center;
       outline: none;
       background: #fff;
+    }
+    .settings-row input[type="checkbox"] {
+      flex: 0 0 80px;
+      width: 20px;
+      height: 20px;
+      margin-left: auto;
+      cursor: pointer;
+      accent-color: var(--accent);
     }
     .settings-row select { cursor: pointer; }
     .settings-row input[type="number"]:focus,
@@ -584,23 +593,17 @@
             </label>
             <label class="settings-row">
               <span>
-                月视图格子上限
-                <span class="settings-inline-hint" title="月视图单个日期块的最大边长（px）。4k 大屏下防止格子过大，UI 整体会反向缩窄到不超过这个值。范围 40-200">?</span>
+                方块大小上限
+                <span class="settings-inline-hint" title="所有视图（月/季/年）日期块的最大边长（px）。4k 大屏下防止格子过大，季/年视图也会按这个值截断 cellSize。范围 40-200">?</span>
               </span>
               <input type="number" id="max-cell-input" min="40" max="200" step="4">
             </label>
             <label class="settings-row screen-ratio-row">
               <span>
-                屏占比
-                <span class="settings-inline-hint" title="横屏占比：4k/2k 大屏拉到 100% 容易显得太满，降到 75%–83% 更舒服；平板/手机全屏场景可以保持 100%">?</span>
+                全屏
+                <span class="settings-inline-hint" title="开：UI 占满 viewport 宽度（留 16px 边距）。关：UI 宽度由 cellSize × 星期数 × 7 反推，刚好包住日历年历，4k 大屏下会缩到中间。">?</span>
               </span>
-              <select id="screen-ratio-input">
-                <option value="1">100%</option>
-                <option value="0.83">83%</option>
-                <option value="0.75">75%</option>
-                <option value="0.66">66%</option>
-                <option value="0.5">50%</option>
-              </select>
+              <input type="checkbox" id="fullscreen-input">
             </label>
             <p class="settings-hint">列数 21–28（cellSize 41–49px）效果最佳</p>
           </div>
@@ -690,19 +693,20 @@
     function shouldShowBadge(cellSize) { return cellSize >= BADGE_MIN_CELLSIZE; }
 
     function calculateStripLayout(containerWidth) {
-      // v0.3.0：先按 state.screenRatio 收一收 effectiveWidth
-      // 屏占比 = 横向用多少比例填充 panel（比如 1.0 全填、0.75 居中留白）
-      const ratio = state.screenRatio || 1.0;
-      const effectiveWidth = Math.floor(containerWidth * ratio);
+      // v0.3.4：移除屏占比乘 ratio（已改成全屏开关），直接用 panel 宽度
+      // 季/年视图 cellSize 也按 maxCellSize 截断，跟月视图一致
+      const effectiveWidth = containerWidth;
       const maxCols = state.maxStripCols || DEFAULT_MAX_STRIP_COLS;
-      const top = Math.max(MIN_STRIP_COLS, Math.min(maxCols, 49) - (maxCols - 1) % 7 - 1 + 1);
+      const cellSizeCap = state.maxCellSize || 80;
       // 把 maxCols 向下取整到 7 的倍数
       const maxAligned = Math.floor(maxCols / 7) * 7;
       for (let cols = maxAligned; cols >= MIN_STRIP_COLS; cols -= 7) {
-        const cellSize = Math.floor((effectiveWidth - STRIP_GAP * (cols - 1)) / cols);
+        const raw = Math.floor((effectiveWidth - STRIP_GAP * (cols - 1)) / cols);
+        // v0.3.4：方块上限应用到所有视图，cellSize 最大不超过 maxCellSize
+        const cellSize = Math.min(raw, cellSizeCap);
         if (cellSize >= MIN_CELL_SIZE) return { cols, cellSize };
       }
-      // 极窄屏兜底：用 7 列、cell 尽可能大（允许 < 41）
+      // 极窄屏兜底：用 7 列、cell 尽可能大（允许 < 41，也允许 > cellSizeCap 让格更清楚）
       const fallback = Math.floor((effectiveWidth - STRIP_GAP * (MIN_STRIP_COLS - 1)) / MIN_STRIP_COLS);
       return { cols: MIN_STRIP_COLS, cellSize: Math.max(fallback, 20) };
     }
@@ -740,24 +744,15 @@
       viewMonth: null,
       viewMode: 'month',
       maxStripCols: DEFAULT_MAX_STRIP_COLS,
-      // v0.3.0：横屏屏占比（1.0 全填，0.75 居中 75% 宽），大屏不要太夸张
-      screenRatio: 1.0,
-      // v0.3.2：月视图最大格子边长（px），UI 宽度反向限制 mainW 不小于 maxCellSize*7+gap
-      maxCellSize: 80
+      // v0.3.4：方块大小上限（px），所有视图通用 cap（月/季/年 cellSize 都不超过这个）
+      maxCellSize: 80,
+      // v0.3.4：全屏开关（true=UI 撑满 viewport - 32，false=UI 刚好包住日历年历 cellSize*7*weekCount）
+      // 替代 v0.3.0-v0.3.3 的 5 档屏占比
+      fullscreen: true
     };
 
-    // 屏占比合法档位（5 档：100/83/75/66/50）
+    // v0.3.0-v0.3.3 旧版屏占比档位（仅 migration 用，把旧值映射到新全屏开关）
     const SCREEN_RATIO_OPTIONS = [1.0, 0.83, 0.75, 0.66, 0.5];
-    function normalizeScreenRatio(v) {
-      // 找最近的合法档位
-      let best = SCREEN_RATIO_OPTIONS[0];
-      let bestDelta = Math.abs(v - best);
-      for (const opt of SCREEN_RATIO_OPTIONS) {
-        const d = Math.abs(v - opt);
-        if (d < bestDelta) { best = opt; bestDelta = d; }
-      }
-      return best;
-    }
 
     // ========== Storage ==========
     function loadState() {
@@ -787,19 +782,28 @@
       } else {
         state.maxStripCols = Math.min(49, Math.floor(state.maxStripCols / 7) * 7);
       }
-      // screenRatio 必须落在合法档位里
-      if (typeof state.screenRatio !== 'number' || state.screenRatio <= 0) {
-        state.screenRatio = 1.0;
-      } else {
-        state.screenRatio = normalizeScreenRatio(state.screenRatio);
-      }
-      // maxCellSize 月视图最大格子边长（px），范围 40-200
+      // v0.3.4：maxCellSize 改成所有视图通用 cap（月/季/年），范围 40-200
       if (typeof state.maxCellSize !== 'number' || state.maxCellSize < 40) {
         state.maxCellSize = 80;
       } else if (state.maxCellSize > 200) {
         state.maxCellSize = 200;
       } else {
         state.maxCellSize = Math.round(state.maxCellSize);
+      }
+      // v0.3.4：从旧版 screenRatio migration 到 fullscreen 开关
+      // 旧 screenRatio=1.0 → fullscreen=true（保持满宽体验）
+      // 旧 screenRatio<1.0 → fullscreen=false（关全屏，UI 缩到刚好包住日历年历）
+      if (typeof state.fullscreen !== 'boolean') {
+        if (typeof state.screenRatio === 'number' && state.screenRatio > 0) {
+          // 旧值迁移：先归一化到合法档位
+          const normalized = (SCREEN_RATIO_OPTIONS || [1.0, 0.83, 0.75, 0.66, 0.5])
+            .reduce((best, opt) => Math.abs(state.screenRatio - opt) < Math.abs(state.screenRatio - best) ? opt : best, 1.0);
+          state.fullscreen = (normalized === 1.0);
+        } else {
+          state.fullscreen = true;
+        }
+        // 清掉旧字段避免下次 migration 误判
+        delete state.screenRatio;
       }
       saveState();
     }
@@ -1157,28 +1161,32 @@
     }
 
     // ========== UI 整体宽度（仅作用于 .ui-wrap 容器）==========
-    // v0.3.3：月视图不应用屏占比，季/年视图才用 ratio
+    // v0.3.4：屏占比 5 档 → 全屏开关（on/off）
+    //   - 全屏 ON：UI 撑满 viewport - APP_MARGIN（原来 100% 屏占比）
+    //   - 全屏 OFF：UI 由 maxCellSize × 星期数 × 7 反推，刚好包住日历年历
+    //     main panel = maxCellSize × maxStripCols + gap × (maxStripCols - 1)
+    //     UI = sidebar + main + stats + padding + gaps（cellUiW 公式）
     //
-    // 影响因素清单（refactor 后所有可能影响 uiW 的变量都集中在这里）：
-    //   1. 屏占比 state.screenRatio (1.0 / 0.83 / 0.75 / 0.66 / 0.5)
-    //      - 仅作用于季/年视图：strip 居中显示，4k 大屏不显得太空
-    //      - 月视图不应用屏占比：cellUiW 永远主导（maxCellSize 决定），屏占比 75% 毫无意义
-    //      - 100% 屏占比 = (appW - 32)，留 32px 边距让 3 panel 不贴屏幕
-    //      - 75% 屏占比 = (appW - 32) × 0.75
-    //      - 竖屏强制 1.0（matchMedia portrait + CSS @media 隐藏 .screen-ratio-row）
-    //   2. 月视图最大格子边长 state.maxCellSize (40-200 px，默认 80)
-    //      - 反向要求 uiW 至少能放下 maxCellSize×7 + 6×gap 的 main panel
-    //      - 4k 大屏下防止 cellSize 无限放大；用户改小 maxCellSize → uiW 下限跟着缩
-    //   3. Sidebar / Stats 固定宽度 SIDEBAR_W / STATS_W (240 / 280)
-    //   4. .ui-wrap 内边距 PANEL_GAP / UI_PAD（panel 之间 8 + container padding 8）
-    //   5. APP_MARGIN = 16（UI 跟 .app 边缘的留白，强制留 16px 防止贴屏幕）
+    // 影响因素清单：
+    //   1. 全屏开关 state.fullscreen (true / false)
+    //      - true  →  UI = appW - APP_MARGIN × 2
+    //      - false →  UI = cellUiW（由 maxCellSize × weekCount × 7 反推，4k 大屏下缩到中间）
+    //   2. 方块大小上限 state.maxCellSize (40-200 px，默认 80)
+    //      - 所有视图通用 cap：月视图直接用，季/年视图在 calculateStripLayout 里截断
+    //      - UI 宽度下限：保证 cellSize*7 + gap*6 的 mainW 能放下
+    //   3. 星期数 state.maxStripCols / 7 (1-7，默认 5)
+    //      - 季/年视图用：maxStripCols = weekCount × 7
+    //      - 全屏 OFF 时影响 UI 宽度（cellUiW 公式里的 maxCellSize × maxStripCols）
+    //   4. Sidebar / Stats 固定宽度 SIDEBAR_W / STATS_W (240 / 280)
+    //   5. .ui-wrap 内边距 PANEL_GAP / UI_PAD（panel 之间 8 + container padding 8）
+    //   6. APP_MARGIN = 16（UI 跟 .app 边缘的留白，强制留 16px 防止贴屏幕）
     //
     // 公式：
-    //   ratioUiW = floor((appW - APP_MARGIN*2) * ratio)   ← ratio 在月视图强制 1.0
-    //   cellUiW  = SIDEBAR_W + maxCellSize*7 + GAP*6 + STATS_W + GAP*2 + UI_PAD*2
-    //   uiW      = max(ratioUiW, cellUiW)
+    //   fullscreen ON  →  uiW = appW - APP_MARGIN*2
+    //   fullscreen OFF →  cellUiW = SIDEBAR_W + maxCellSize*maxStripCols + GAP*(maxStripCols-1) + STATS_W + GAP*2 + UI_PAD*2
+    //                    uiW = cellUiW（季/年）；uiW = cellUiW with cols=7（月视图也走 cellUiW）
     //
-    // 输出（应用 applyUiWidth）：
+    // 输出（应用 applyScreenRatio）：
     //   appW - APP_MARGIN*2 < MIN_UI_W → max-width = ''，太窄让响应式接管（堆叠）
     //   否则                            → max-width = min(uiW, appW - APP_MARGIN*2)
     //                                     关键：永远留 APP_MARGIN 边距；uiW 超过可用宽度时按可用宽度走
@@ -1197,24 +1205,30 @@
       const isPortrait = window.matchMedia
         ? window.matchMedia('(orientation: portrait)').matches
         : window.innerHeight > window.innerWidth;
-      // v0.3.3：月视图不应用屏占比（cellUiW 永远主导，ratio 75% 改了也白改）
-      // 季/年视图才用 ratio —— strip 算法根据 panel 宽度算 cellSize，ratio 缩 panel 自然缩 strip
-      const isMonth = state.viewMode === 'month';
-      const ratio = (isPortrait || isMonth) ? 1.0 : (state.screenRatio || 1.0);
+      // v0.3.4：竖屏强制全屏（窄屏本来就不能缩，关掉会让 UI 比屏还宽更难看）
+      const fullscreen = isPortrait ? true : !!state.fullscreen;
       const maxCellSize = state.maxCellSize || 80;
+      const maxStripCols = state.maxStripCols || DEFAULT_MAX_STRIP_COLS;
 
-      // 屏占比限制
-      const ratioUiW = Math.floor((appW - APP_MARGIN * 2) * ratio);
-      // 月视图最大格子限制：保证 maxCellSize×7 + GAP×6 的 mainW 能放下
-      const cellUiW = SIDEBAR_W
-        + maxCellSize * 7 + PANEL_GAP * 6
+      // 全屏 UI：appW - 32（满宽，留 16px 边距）
+      const fullUiW = appW - APP_MARGIN * 2;
+
+      // 非全屏 UI：cellUiW 公式（maxCellSize × maxStripCols 推 main panel，再 + sidebar + stats + padding + gaps）
+      // v0.3.4：月视图 main 固定 7 列（不是 maxStripCols），用 maxCellSize*7 + 6*gap
+      //         季/年视图 main 是 maxStripCols 列（strip 一行 weekCount 周 = maxStripCols 格）
+      const isMonth = state.viewMode === 'month';
+      const mainCols = isMonth ? 7 : maxStripCols;
+      const mainW = maxCellSize * mainCols + PANEL_GAP * (mainCols - 1);
+      const compactUiW = SIDEBAR_W
+        + mainW
         + STATS_W
         + PANEL_GAP * 2
         + UI_PAD * 2;
+
       return {
-        uiW: Math.max(ratioUiW, cellUiW),
-        ratioUiW, cellUiW,
-        ratio, maxCellSize, appW
+        uiW: fullscreen ? fullUiW : compactUiW,
+        fullUiW, compactUiW,
+        fullscreen, maxCellSize, maxStripCols, appW
       };
     }
     function applyScreenRatio() {
@@ -1419,12 +1433,12 @@
       const settingsMenu = document.getElementById('settings-menu');
       const maxColsInput = document.getElementById('max-cols-input');
       const maxCellInput = document.getElementById('max-cell-input');
-      const screenRatioInput = document.getElementById('screen-ratio-input');
+      const fullscreenInput = document.getElementById('fullscreen-input');
       // 星期数 input：用户输入 1-7 整数，state 存对应的 7 的倍数（1=7, 5=35, 7=49）
       maxColsInput.value = state.maxStripCols / 7;
       maxCellInput.value = state.maxCellSize;
-      // select 的 value 是字符串，要精确匹配（normalizeScreenRatio 已经吸附）
-      screenRatioInput.value = String(state.screenRatio);
+      // 全屏 checkbox
+      fullscreenInput.checked = !!state.fullscreen;
       settingsBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         settingsMenu.classList.toggle('hidden');
@@ -1443,26 +1457,25 @@
         state.maxStripCols = v * 7;
         saveState();
         if (state.viewMode !== 'month') renderCalendar();
+        // 星期数影响非全屏 UI 宽度（cellUiW 公式），强制重渲
+        if (!state.fullscreen) renderCalendar();
       });
       maxCellInput.addEventListener('change', () => {
-        // 月视图最大格子边长（40-200 px）
+        // v0.3.4：方块大小上限（40-200 px），所有视图通用 cap
         let v = parseInt(maxCellInput.value, 10);
         if (isNaN(v) || v < 40) v = 40;
         if (v > 200) v = 200;
         maxCellInput.value = v;
         state.maxCellSize = v;
         saveState();
-        // 月视图限制会影响 UI 整体宽度（applyScreenRatio），所以任何视图都重渲
+        // 方块上限影响 UI 整体宽度（applyScreenRatio）+ 季/年 cellSize 截断，任何视图都重渲
         renderCalendar();
       });
-      screenRatioInput.addEventListener('change', () => {
-        // select 的 5 档都是合法值，直接 parseFloat
-        const raw = parseFloat(screenRatioInput.value);
-        const v = normalizeScreenRatio(raw);
-        screenRatioInput.value = String(v);
-        state.screenRatio = v;
+      fullscreenInput.addEventListener('change', () => {
+        // v0.3.4：全屏开关
+        state.fullscreen = fullscreenInput.checked;
         saveState();
-        // 屏占比影响 UI 整体宽度（applyScreenRatio），任何视图都重渲
+        // 全屏切换影响 UI 整体宽度（applyScreenRatio），任何视图都重渲
         renderCalendar();
       });
 
