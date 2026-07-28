@@ -248,9 +248,8 @@
     }
     .weekday-row {
       display: grid;
-      grid-template-columns: repeat(var(--cols, 21), minmax(0, 1fr));
+      /* grid-template-columns 和 font-size 由 JS 根据视口动态算 */
       gap: 2px;
-      font-size: 9px;
       color: var(--text-soft);
       text-align: center;
       margin-bottom: 3px;
@@ -260,10 +259,11 @@
 
     .day-strip {
       display: grid;
-      grid-template-columns: repeat(var(--cols, 21), minmax(0, 1fr));
+      /* grid-template-columns 和 font-size 由 JS 根据视口动态算 */
       gap: 2px;
     }
     .strip-day {
+      /* 正方形：宽 = 网格列宽 = 网格列宽，aspect-ratio 强制高 = 宽 */
       aspect-ratio: 1 / 1;
       background: var(--panel);
       border: 1px solid var(--border);
@@ -271,11 +271,10 @@
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 9px;
+      /* font-size 由 JS 动态算（cell * 0.2，夹 9-24） */
       color: var(--text-soft);
       cursor: pointer;
       position: relative;
-      min-width: 0;
     }
     .strip-day.blank { background: transparent; border: 0; cursor: default; }
     .strip-day.future { cursor: not-allowed; opacity: 0.4; }
@@ -286,13 +285,8 @@
     .strip-day.wkn:not(.logged) .strip-day-num { color: #ef4444; }
     .strip-day-num { line-height: 1; }
 
-    /* 年视图：53 行太高，格子改固定高度 + 小字，一周一行更紧凑 */
+    /* 年视图：gap 更小，1px 让 53 行不至于太松散 */
     .day-strip.year-strip { gap: 1px; }
-    .day-strip.year-strip .strip-day {
-      aspect-ratio: auto;
-      height: 20px;
-      font-size: 10px;
-    }
 
     /* ===== Stats ===== */
     .stats h2 {
@@ -452,6 +446,41 @@
     const VIEW_STEP  = { month: 1, quarter: 3, year: 12 };
     const VIEW_COUNT = { month: 1, quarter: 3, year: 12 };
     const WEEKDAY_NAMES = ['日', '一', '二', '三', '四', '五', '六'];
+
+    // ========== Strip layout (季/年视图自适应) ==========
+    // 原则：
+    //  1) 单行渲染列数必须是 7 的倍数（保证星期整除）
+    //  2) 日期块必须正方形（aspect-ratio: 1/1）
+    //  3) 格子像素必须 >= 41（1080*0.8/21 的舒适下限）
+    //  4) 在保证 (3) 的前提下尽量多列填满屏幕
+    // 算法：从 MAX 往下试 7 的倍数，第一个 cellSize >= 41 的列数即为最优
+    const MIN_CELL_SIZE = 41;       // 1080 * 0.8 / 21 ≈ 41，下限
+    const STRIP_GAP     = 2;
+    const MAX_STRIP_COLS = 49;      // 7 周/行，再大就太扁了
+    const MIN_STRIP_COLS = 7;
+    const CELL_FONT_RATIO = 0.2;    // font = cell * 0.2
+    const MIN_FONT_SIZE   = 9;
+    const MAX_FONT_SIZE   = 24;     // 2k+ 大屏别让字无限放大
+
+    function calculateStripLayout(containerWidth) {
+      for (let cols = MAX_STRIP_COLS; cols >= MIN_STRIP_COLS; cols -= 7) {
+        const cellSize = Math.floor((containerWidth - STRIP_GAP * (cols - 1)) / cols);
+        if (cellSize >= MIN_CELL_SIZE) return { cols, cellSize };
+      }
+      // 极窄屏兜底：用 7 列、cell 尽可能大（允许 < 41）
+      const fallback = Math.floor((containerWidth - STRIP_GAP * (MIN_STRIP_COLS - 1)) / MIN_STRIP_COLS);
+      return { cols: MIN_STRIP_COLS, cellSize: Math.max(fallback, 20) };
+    }
+    function calcFontSize(cellSize) {
+      return Math.max(MIN_FONT_SIZE, Math.min(MAX_FONT_SIZE, Math.round(cellSize * CELL_FONT_RATIO)));
+    }
+    function measureStripWidth() {
+      const wrap = document.getElementById('strip-wrap');
+      const panel = (wrap && wrap.closest('.panel')) || document.querySelector('main.panel');
+      // panel 16px padding * 2 = 32
+      const inner = panel ? panel.clientWidth - 32 : 0;
+      return Math.max(inner, 280); // 兜底 280px，避免初次渲染拿到 0
+    }
 
     // ========== State ==========
     let state = {
@@ -665,9 +694,9 @@
     // ========== Render: Strip data (shared by quarter / year) ==========
     // 把一组连续月份流式展开成 strip 数据
     // 关键：只第一个月加前缀空对齐到对应周几，后续月份紧接上个月的最后一天 → 不会"跳星期"
-    // 一行 weeksPerRow 周（7 × weeksPerRow 列），自动换行
-    function buildStripData(months, weeksPerRow) {
-      const cols = 7 * weeksPerRow;
+    // cols 由调用方根据视口算出（7 的倍数）
+    function buildStripData(months, cols) {
+      const weeksPerRow = cols / 7;
       const weekdayLabels = [];
       for (let i = 0; i < weeksPerRow; i++) {
         for (let d = 0; d < 7; d++) {
@@ -693,16 +722,21 @@
     }
 
     // 把 strip 数据渲染到 #strip-wrap（weekday row + day strip）
-    function renderStripEl(data, stripClass) {
+    // cols/cellSize/fontSize 由 calculateStripLayout + calcFontSize 根据视口算出
+    function renderStripEl(data, cellSize, fontSize, stripClass) {
       const wrap = document.getElementById('strip-wrap');
       wrap.innerHTML = '';
       const now = new Date();
       const todayKey = dateStr(now.getFullYear(), now.getMonth(), now.getDate());
       const proj = getProject(state.currentProjectId);
 
+      const gridStyle = `repeat(${data.cols}, ${cellSize}px)`;
+
+      // weekday row
       const wdRow = document.createElement('div');
       wdRow.className = 'weekday-row';
-      wdRow.style.setProperty('--cols', data.cols);
+      wdRow.style.gridTemplateColumns = gridStyle;
+      wdRow.style.fontSize = `${fontSize}px`;
       data.weekdayLabels.forEach((label, i) => {
         const span = document.createElement('span');
         const isWkn = (i % 7 === 0) || (i % 7 === 6);
@@ -712,31 +746,36 @@
       });
       wrap.appendChild(wdRow);
 
+      // day strip
       const strip = document.createElement('div');
       strip.className = 'day-strip' + (stripClass ? ' ' + stripClass : '');
-      strip.style.setProperty('--cols', data.cols);
+      strip.style.gridTemplateColumns = gridStyle;
+      strip.style.fontSize = `${fontSize}px`;
       data.cells.forEach(c => {
         strip.appendChild(buildStripCell(c, todayKey, proj));
       });
       wrap.appendChild(strip);
     }
 
-    // 季视图：1 块，3 个月，3 周/行 = 21 列；只第一个月加前缀空
+    // 季视图：1 块，3 个月连续流，列数由视口决定（7 的倍数）
     function renderQuarter() {
       const months = [];
       for (let i = 0; i < 3; i++) {
         const { y, m } = addMonths(state.viewYear, state.viewMonth, i);
         months.push({ y, m });
       }
-      renderStripEl(buildStripData(months, 3));
+      const { cols, cellSize } = calculateStripLayout(measureStripWidth());
+      const data = buildStripData(months, cols);
+      renderStripEl(data, cellSize, calcFontSize(cellSize));
     }
 
-    // 年视图：1 块，12 个月，1 周/行 = 7 列；只 1/1 加前缀空 → 53 行左右
-    // 跟季视图是独立组件，不复用、不拼接
+    // 年视图：独立组件，1 块，12 个月连续流，列数由视口决定
     function renderYear() {
       const months = [];
       for (let m = 0; m < 12; m++) months.push({ y: state.viewYear, m });
-      renderStripEl(buildStripData(months, 1), 'year-strip');
+      const { cols, cellSize } = calculateStripLayout(measureStripWidth());
+      const data = buildStripData(months, cols);
+      renderStripEl(data, cellSize, calcFontSize(cellSize), 'year-strip');
     }
 
     function buildStripCell(cellData, todayKey, proj) {
@@ -947,6 +986,15 @@
       loadState();
       renderColorPicker();
       renderAll();
+
+      // 视口缩放时重算 strip 布局（季/年视图列数和格子大小）
+      let _resizeTimer = null;
+      window.addEventListener('resize', () => {
+        clearTimeout(_resizeTimer);
+        _resizeTimer = setTimeout(() => {
+          if (state.viewMode !== 'month') renderCalendar();
+        }, 100);
+      });
 
       document.getElementById('prev-month').addEventListener('click', () => shiftView(-1));
       document.getElementById('next-month').addEventListener('click', () => shiftView(1));
