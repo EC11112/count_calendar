@@ -1,5 +1,43 @@
 # Changelog
 
+## v0.3.6 — 2026-07-28
+
+**默认只读 + 编辑模式开关**
+
+之前日历默认就能点击添加/修改 log,日常"看看这个月干了啥"的时候经常不小心点一下就改了数据,得手动改回去。这次默认只读,加一个 ✏ 编辑开关,主动打开才能改。
+
+---
+
+**1. ✏ 编辑按钮 (header 右侧,⚙ 左边)**
+
+- **默认关闭**: 显示灰色 ✏ 图标
+- **点击切换**: 关闭 ↔ 激活态(蓝色高亮,跟 view-toggle active 一致)
+- **持久化**: `state.editMode` 保存到 localStorage,刷新后保留上次状态
+- **位置**: 在 view-toggle 右边,⚙ 设置按钮左边,逻辑分组(显示设置 / 编辑数据)
+
+**2. 关闭时只读,点击 cell 不改 log**
+
+- `buildCalCell` 增加 `state.editMode` 守护:关闭时直接不绑 click handler
+- cell cursor 也跟着切换:关闭 → `default`(不显示手指,提示不可点),打开 → `pointer`
+- 关闭时还能 hover cell 看 tooltip(多项目明细 hover 提示仍正常)
+- 关闭时 calendar 顶部加 `.cal-view.readonly-mode` class,作为 CSS 钩子
+
+**3. 跟现有逻辑的兼容**
+
+- 切换 `editMode` 时调用 `renderHeader()` + `renderCalendar()`:
+  - `renderHeader` 同步按钮 active class + cal-view readonly-mode class
+  - `renderCalendar` 重建所有 cell,按当前 editMode 决定绑不绑 click
+- migration 老数据: `state.editMode` 不是 boolean → 默认 `false`(只读)
+- 跟多项目(v0.3.5)、全屏、视图切换都不冲突
+
+**4. 实际使用场景**
+
+- **只读模式**(默认): 看历史数据,不担心误触
+- **打开编辑**: 主动加今天的 log,补昨天的,改错的
+- 建议: 日常开着别关,真的要看统计/历史时关掉,需要改时再开
+
+---
+
 ## v0.3.5 — 2026-07-28
 
 **多项目显隐 + 同日多项目显示**
