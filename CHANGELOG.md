@@ -1,5 +1,66 @@
 # Changelog
 
+## v0.3.7 — 2026-07-28
+
+**Q1 移动按钮 + Q2 项目分类 + Q3 眼按钮修复**
+
+三个迭代改进一起上线,都是 v0.3.6 之后用着发现的痛点。
+
+---
+
+**1. ✏⚙ 按钮从 cal-header 移到 stats 顶部独立小区域**
+
+之前两个按钮挤在日历 header 右侧(跟导航/月视图切换混在一起),逻辑分组不清晰。改成 stats panel 顶部一行,视觉上独立小区域(border-bottom 分割,跟 stats 区分开),统一"显示/编辑控制"语义。
+
+- cal-header 只剩导航 + 月/季/年切换,清爽
+- stats panel 顶部 `.stats-actions` 横条: ✏ 编辑 + ⚙ 设置(28x28 紧凑按钮)
+- settings-menu 仍 fixed 定位,通过 settings-btn.getBoundingClientRect() 算位置(不依赖 DOM 位置)
+
+**2. 项目分类:工时类 vs 非工时类**
+
+实际生活里"健身" / "阅读" / "冥想" 这种只关心"做了多少天",半天/整天概念没意义。新加 `kind` 字段区分两种项目。
+
+| 维度 | 工时类 (hours) | 非工时类 (days) |
+|------|----------------|------------------|
+| 默认新建 | ✓ |  |
+| click cycle | 0→半天→整天→0 (mod 3) | 0→√天→0 (mod 2) |
+| 渲染 alpha | 半天 0.4,整天 0.85 | 0.85 (无"半"概念) |
+| 徽章 | 半/整 | 不显示(简洁) |
+| hover tooltip | `项目·半天 / 整天` | `项目·√天` |
+| 统计 | "X 整天 · Y 半天" | "X 天" |
+| 折合小时 | 整天×8h + 半天×4h | 不计入 |
+
+- 新建项目表单加 kind 选择(radio)
+- 老数据 migration: `p.kind` undefined → 'hours'
+- `sumLogs(logs, kind)` 按 kind 区分逻辑
+- `getLogsInRange / getAllLogs` 返回 `{ hours, days }` 分类 logs,renderStats 分别 sum
+- stats 本月/总计 sub 文字: "工时 1 整天 · 3 半天 + 非工时 2 天"
+
+**3. 眼按钮点击不生效 bug 修复 🐛**
+
+v0.3.5 加的 eye 按钮 click 一直不切 visible 状态,根因是 JS bug:
+
+```js
+// 之前 (有 bug)
+const isHidden = p.visible === false;  // 闭包,li 创建时捕获
+li.querySelector('.eye').addEventListener('click', (e) => {
+  p.visible = !isHidden;  // 永远设 true(因为 isHidden 创建时=false)
+  ...
+});
+
+// 现在 (修复)
+li.querySelector('.eye').addEventListener('click', (e) => {
+  p.visible = !p.visible;  // 读当前状态,toggle 正确
+  ...
+});
+```
+
+**副作用改进**: 眼按钮默认 visible(opacity 0.5,hover 1.0),不再需要 hover 才能看到 — 旧版默认 visibility:hidden 用户经常找不到眼按钮(以为是 UI bug)
+
+眼/删按钮尺寸 16x18 → 24x24,增大点击区,防止误点旁边的项目名
+
+---
+
 ## v0.3.6 — 2026-07-28
 
 **默认只读 + 编辑模式开关**

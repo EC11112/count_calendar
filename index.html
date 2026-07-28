@@ -71,6 +71,18 @@
     /* v0.3.2：main panel 必须 min-width: 0，否则 grid 1fr track 会被子 grid（季/年 14-21 列）撑大 */
     main.panel { min-width: 0; }
 
+    /* v0.3.7：stats panel 顶部动作条(✏⚙),在 stats 标题之上,视觉上独立小区域 */
+    .stats-actions {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 6px;
+      padding: 4px 6px 10px;
+      margin: -6px -6px 12px;
+      border-bottom: 1px solid var(--border);
+    }
+    .stats-actions .header-icon-btn { width: 28px; height: 28px; font-size: 14px; }
+
     /* ===== Sidebar ===== */
     .sidebar { display: flex; flex-direction: column; }
     .sidebar h2 {
@@ -97,6 +109,15 @@
     /* v0.3.5：hidden project 灰显 + 名字加删除线 */
     .project-item.hidden-project .name { color: var(--text-faint); text-decoration: line-through; }
     .project-item.hidden-project .dot { opacity: 0.35; }
+    /* v0.3.7：eye / del 按钮统一尺寸 22x22, 增大点击区, 防止误点 */
+    .project-item .eye, .project-item .del {
+      width: 22px; height: 22px;
+      padding: 0;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
     .project-item .dot {
       width: 12px; height: 12px;
       border-radius: 50%;
@@ -109,7 +130,7 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    /* v0.3.5：eye 按钮 — 切换项目显隐,默认 hover 才显示 */
+    /* v0.3.5：eye 按钮 — 切换项目显隐 */
     .project-item .eye {
       visibility: hidden;
       background: transparent;
@@ -118,13 +139,22 @@
       cursor: pointer;
       font-size: 14px;
       line-height: 1;
-      padding: 2px 4px;
+      padding: 0;
+      width: 24px; height: 24px;
       border-radius: 4px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
     }
     .project-item:hover .eye { visibility: visible; }
     .project-item .eye:hover { background: var(--hover); color: var(--text); }
-    /* hidden project 的 eye 永远显示（让用户能恢复） */
-    .project-item.hidden-project .eye { visibility: visible; opacity: 0.5; }
+    /* v0.3.7：eye 按钮默认一直显示（常用操作,hover 高亮加深），不依赖 hover 才能看到
+       之前 v0.3.5 默认 visibility:hidden,只 hover 才显示,用户经常找不到眼按钮 */
+    .project-item .eye {
+      visibility: visible;
+      opacity: 0.5;
+    }
+    .project-item:hover .eye { opacity: 1; }
     .project-item .del {
       visibility: hidden;
       background: transparent;
@@ -520,6 +550,30 @@
       outline: none;
     }
     .modal-content input[type="text"]:focus { border-color: var(--accent); }
+    /* v0.3.7：项目类型选择 (工时/非工时) */
+    .kind-picker {
+      display: flex;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+    .kind-option {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      cursor: pointer;
+      font-size: 13px;
+      color: var(--text);
+      user-select: none;
+    }
+    .kind-option input[type="radio"] {
+      cursor: pointer;
+      accent-color: var(--accent);
+    }
+    .kind-option .kind-hint {
+      color: var(--text-faint);
+      font-size: 11px;
+      margin-left: 2px;
+    }
     .color-picker {
       display: grid;
       grid-template-columns: repeat(8, 1fr);
@@ -583,44 +637,40 @@
           <button data-view="quarter" title="季度视图（连续 3 个月，列数 = 星期数 × 7）">季</button>
           <button data-view="year"    title="年视图（连续 12 个月，列数 = 星期数 × 7）">年</button>
         </div>
-        <div class="header-actions">
-          <button id="edit-toggle" class="header-icon-btn" title="编辑模式：关时点击日历不会修改记录，开时点击切换 0 → 半天 → 整天" aria-label="编辑模式">✏</button>
-          <button id="settings-btn" class="header-icon-btn" title="设置" aria-label="设置">⚙</button>
-          <div class="settings-menu hidden" id="settings-menu">
-            <label class="settings-row">
-              <span>
-                星期数
-                <span class="settings-inline-hint" title="季/年视图每行几周（1 周 = 7 列）。月视图固定 1 周不生效。范围 1-7，默认 5。">?</span>
-              </span>
-              <input type="number" id="max-cols-input" min="1" max="7" step="1">
-            </label>
-            <label class="settings-row">
-              <span>
-                方块大小上限
-                <span class="settings-inline-hint" title="日期格子最大边长（px）。所有视图通用 cap，大屏防格子过大。范围 40-200，默认 80。">?</span>
-              </span>
-              <input type="number" id="max-cell-input" min="40" max="200" step="4">
-            </label>
-            <label class="settings-row screen-ratio-row">
-              <span>
-                全屏
-                <span class="settings-inline-hint" title="开：日历撑满视口宽度（留 16px 边距）。关：由下方「日历宽度」滑条控制。竖屏强制开。">?</span>
-              </span>
-              <input type="checkbox" id="fullscreen-input">
-            </label>
-            <!-- v0.3.4+：滑条调控日历面板 mainW，全屏开时灰色禁用
-                 min = 7 × 方块上限 × 1.1（一周大小 + 10% 余量）
-                 max = 视口 × 0.7
-                 默认 = 当前视图的 cellUiW mainW（用户没拖过就一直自动算） -->
-            <label class="settings-row screen-ratio-row">
-              <span>
-                日历宽度
-                <span class="settings-inline-hint" title="非全屏时手动调节日历面板宽度（1 周大小 ~ 视口 70%）。全屏开时该选项无效。">?</span>
-              </span>
-              <input type="range" id="cal-width-input" min="0" max="0" step="10">
-            </label>
-            <p class="settings-hint">日期格子永远正方形；方块上限 = 最大 cellSize，实际按面板宽度算。</p>
-          </div>
+        <div class="settings-menu hidden" id="settings-menu">
+          <label class="settings-row">
+            <span>
+              星期数
+              <span class="settings-inline-hint" title="季/年视图每行几周（1 周 = 7 列）。月视图固定 1 周不生效。范围 1-7，默认 5。">?</span>
+            </span>
+            <input type="number" id="max-cols-input" min="1" max="7" step="1">
+          </label>
+          <label class="settings-row">
+            <span>
+              方块大小上限
+              <span class="settings-inline-hint" title="日期格子最大边长（px）。所有视图通用 cap，大屏防格子过大。范围 40-200，默认 80。">?</span>
+            </span>
+            <input type="number" id="max-cell-input" min="40" max="200" step="4">
+          </label>
+          <label class="settings-row screen-ratio-row">
+            <span>
+              全屏
+              <span class="settings-inline-hint" title="开：日历撑满视口宽度（留 16px 边距）。关：由下方「日历宽度」滑条控制。竖屏强制开。">?</span>
+            </span>
+            <input type="checkbox" id="fullscreen-input">
+          </label>
+          <!-- v0.3.4+：滑条调控日历面板 mainW，全屏开时灰色禁用
+               min = 7 × 方块上限 × 1.1（一周大小 + 10% 余量）
+               max = 视口 × 0.7
+               默认 = 当前视图的 cellUiW mainW（用户没拖过就一直自动算） -->
+          <label class="settings-row screen-ratio-row">
+            <span>
+              日历宽度
+              <span class="settings-inline-hint" title="非全屏时手动调节日历面板宽度（1 周大小 ~ 视口 70%）。全屏开时该选项无效。">?</span>
+            </span>
+            <input type="range" id="cal-width-input" min="0" max="0" step="10">
+          </label>
+          <p class="settings-hint">日期格子永远正方形；方块上限 = 最大 cellSize，实际按面板宽度算。</p>
         </div>
       </div>
 
@@ -635,11 +685,14 @@
     </main>
 
     <section class="panel stats">
+      <div class="stats-actions">
+        <button id="edit-toggle" class="header-icon-btn" title="编辑模式：关时点击日历不会修改记录，开时点击切换 0 → 半天 → 整天" aria-label="编辑模式">✏</button>
+        <button id="settings-btn" class="header-icon-btn" title="设置" aria-label="设置">⚙</button>
+      </div>
       <h2 id="stats-title">统计</h2>
       <div id="stats-body"></div>
     </section>
     </div><!-- /.ui-wrap -->
-  </div>
 
   <div class="modal hidden" id="project-modal">
     <div class="modal-content">
@@ -648,6 +701,16 @@
         <input type="text" id="project-name" maxlength="20" placeholder="例如：学习、跑步">
       </label>
       <div class="color-picker" id="color-picker"></div>
+      <div class="kind-picker">
+        <label class="kind-option">
+          <input type="radio" name="project-kind" value="hours" checked>
+          <span>工时类<span class="kind-hint">（半天/整天）</span></span>
+        </label>
+        <label class="kind-option">
+          <input type="radio" name="project-kind" value="days">
+          <span>非工时<span class="kind-hint">（只计天）</span></span>
+        </label>
+      </div>
       <div class="modal-actions">
         <button class="btn btn-ghost" id="cancel-project">取消</button>
         <button class="btn btn-primary" id="confirm-project">确定</button>
@@ -786,6 +849,8 @@
       }
       // v0.3.5：每个 project 加 visible 字段（默认 true），老数据 migration
       state.projects.forEach(p => { if (p.visible === undefined) p.visible = true; });
+      // v0.3.7：每个 project 加 kind 字段（默认 'hours' 工时类），老数据 migration
+      state.projects.forEach(p => { if (p.kind === undefined) p.kind = 'hours'; });
       if (!state.logs || typeof state.logs !== 'object') state.logs = {};
       const now = new Date();
       if (state.viewYear == null || state.viewYear < 1900) state.viewYear = now.getFullYear();
@@ -903,9 +968,11 @@
           renderAll();
         });
         // v0.3.5：显隐切换 —— 不删数据,只是不在日历/统计中显示
+        // v0.3.7：bug 修复 — 用 !p.visible (当前状态) 而不是 !isHidden (闭包变量)
+        //   之前 isHidden 在 li 创建时捕获,反复点 eye 不会切换(永远是 !isHidden 的固定值)
         li.querySelector('.eye').addEventListener('click', (e) => {
           e.stopPropagation();
-          p.visible = !isHidden;
+          p.visible = !p.visible;
           saveState();
           renderAll();
         });
@@ -1054,15 +1121,16 @@
 
       if (logs.length === 1) {
         // 单项目：跟原来一样，整格实色 / 半格 0.4 alpha
+        // v0.3.7：非工时类(0/1)只画一档 alpha=0.85，不显示"半"概念
         const { project, clicks } = logs[0];
-        const alpha = clicks === 1 ? 0.4 : 0.85;
+        const isDays = (project.kind === 'days');
+        const alpha = isDays ? 0.85 : (clicks === 1 ? 0.4 : 0.85);
         cell.style.background = hexToRgba(project.color, alpha);
         cell.classList.add('logged');
         cell.dataset.clicks = String(clicks);
       } else if (logs.length >= 2) {
         // v0.3.5：多项目 → 横向分段色条，每项目一个竖条
-        // - 每个项目保留原色,不做 RGB 混合（混合会让颜色变脏）
-        // - 整=0.85,半=0.4;N 等分宽度
+        // v0.3.7：非工时类项目 alpha 固定 0.85
         cell.classList.add('logged', 'multi');
         cell.dataset.clicks = logs.map(l => l.clicks).join(',');
         const n = logs.length;
@@ -1072,12 +1140,17 @@
           bar.className = 'cal-cell-bar';
           bar.style.left = `${(i * w).toFixed(4)}%`;
           bar.style.width = `${w.toFixed(4)}%`;
-          const alpha = log.clicks === 1 ? 0.4 : 0.85;
+          const isDays = (log.project.kind === 'days');
+          const alpha = isDays ? 0.85 : (log.clicks === 1 ? 0.4 : 0.85);
           bar.style.background = hexToRgba(log.project.color, alpha);
           cell.appendChild(bar);
         });
         // hover 提示：所有项目明细
-        const tooltip = logs.map(l => `${l.project.name}·${l.clicks === 1 ? '半天' : '整天'}`).join(' · ');
+        // v0.3.7：非工时类显示"√天"，工时类显示"半天/整天"
+        const tooltip = logs.map(l => {
+          if (l.project.kind === 'days') return `${l.project.name}·√天`;
+          return `${l.project.name}·${l.clicks === 1 ? '半天' : '整天'}`;
+        }).join(' · ');
         cell.setAttribute('title', tooltip);
       }
 
@@ -1086,24 +1159,30 @@
       num.textContent = d;
       cell.appendChild(num);
 
-      // 徽章：只有单项目 + 大格子 + 有 log 才显示
+      // 徽章：单项目 + 大格子 + 有 log 才显示
+      // v0.3.7：非工时类(0/1)不显示"半"徽章(无半天概念)
       if (useBadge && logs.length === 1) {
-        const badge = document.createElement('span');
-        badge.className = 'cal-cell-badge';
-        badge.textContent = logs[0].clicks === 1 ? '半' : '整';
-        badge.style.fontSize = `${badgeFont}px`;
-        cell.appendChild(badge);
+        const isDays = (logs[0].project.kind === 'days');
+        if (!isDays) {
+          const badge = document.createElement('span');
+          badge.className = 'cal-cell-badge';
+          badge.textContent = logs[0].clicks === 1 ? '半' : '整';
+          badge.style.fontSize = `${badgeFont}px`;
+          cell.appendChild(badge);
+        }
       }
 
       // 单击仍然只 toggle active project 的 log(简单点)
       // 注意：active project 不一定是 visible project(用户可能切了 active 但没显隐)
       // 所以这里也兼容 active project 是 hidden 的情况
       // v0.3.6：editMode 关闭时(只读)不绑 click handler,避免误触
+      // v0.3.7：按 active project 的 kind 决定 cycle —— 工时类 0→半→整→0 (mod 3),非工时类 0→√→0 (mod 2)
       const activeProj = getProject(state.currentProjectId);
       if (state.editMode && activeProj && ds <= todayKey) {
         cell.addEventListener('click', () => {
           const cur = getClicks(activeProj.id, ds);
-          const next = (cur + 1) % 3;
+          const modulo = (activeProj.kind === 'days') ? 2 : 3;
+          const next = (cur + 1) % modulo;
           setClicks(activeProj.id, ds, next);
           renderCalendar();
           renderStats();
@@ -1275,38 +1354,58 @@
 
     // ========== Render: Stats ==========
     // v0.3.5：统计按所有 visible project 合并(active project 的概念保留用于编辑/新建)
-    function sumLogs(logs) {
+    // v0.3.7：按 kind 区分统计
+    //   - hours: 0/半天/整天 三态
+    //   - days: 0/√天 二态
+    function sumLogs(logs, kind) {
+      kind = kind || 'hours';
       let days = 0, half = 0;
-      Object.values(logs).forEach(c => {
-        if (c === 1) half++;
-        else if (c === 2) days++;
-      });
-      return { days, half, total: days + half * 0.5 };
+      if (kind === 'days') {
+        // 非工时类：clicks >= 1 算 1 天（实际数据只会是 0 或 1）
+        Object.values(logs).forEach(c => { if (c >= 1) days++; });
+      } else {
+        Object.values(logs).forEach(c => {
+          if (c === 1) half++;
+          else if (c === 2) days++;
+        });
+      }
+      const total = kind === 'days' ? days : (days + half * 0.5);
+      const hours = kind === 'days' ? 0 : (days * 8 + half * 4);
+      return { days, half, total, hours };
     }
-    // 按视图范围筛 logs（合并所有 visible 项目的）
+    // 按视图范围筛 logs（合并所有 visible 项目的）,按 kind 分类返回
     function getLogsInRange() {
       const visibleProjects = getVisibleProjects();
-      const combined = {};
+      const combined = { hours: {}, days: {} };
       const months = state.viewMode === 'month'
         ? [{ y: state.viewYear, m: state.viewMonth }]
         : Array.from({ length: VIEW_COUNT[state.viewMode] }, (_, i) =>
             addMonths(state.viewYear, state.viewMonth, i));
       const prefixes = months.map(({ y, m }) => `${y}-${pad2(m + 1)}`);
       visibleProjects.forEach(p => {
+        const kind = p.kind || 'hours';
         const logs = state.logs[p.id] || {};
         Object.entries(logs).forEach(([k, v]) => {
-          if (prefixes.some(pre => k.startsWith(pre))) combined[k] = v;
+          if (prefixes.some(pre => k.startsWith(pre))) combined[kind][k] = v;
         });
       });
       return combined;
     }
     function getAllLogs() {
-      // 所有 visible 项目的全部 logs(总计用,不受视图范围限制)
-      const combined = {};
+      // 所有 visible 项目的全部 logs(总计用,不受视图范围限制),按 kind 分类
+      const combined = { hours: {}, days: {} };
       getVisibleProjects().forEach(p => {
-        Object.assign(combined, state.logs[p.id] || {});
+        const kind = p.kind || 'hours';
+        Object.assign(combined[kind], state.logs[p.id] || {});
       });
       return combined;
+    }
+    // v0.3.7：格式化 hours 子统计（"X 整天 · Y 半天"）
+    function formatHoursSub(sum) {
+      const parts = [];
+      if (sum.days > 0) parts.push(`${sum.days} 整天`);
+      if (sum.half > 0) parts.push(`${sum.half} 半天`);
+      return parts.length > 0 ? parts.join(' · ') : '0';
     }
     function renderStats() {
       const visibleProjects = getVisibleProjects();
@@ -1333,39 +1432,58 @@
         titleEl.textContent = `统计 · ${visibleProjects.length} 个项目`;
       }
 
-      const all = sumLogs(getAllLogs());
-      const m = sumLogs(getLogsInRange());
+      // v0.3.7：按 kind 分别求和
+      const allLogs = getAllLogs();
+      const rangeLogs = getLogsInRange();
+      const allHours = sumLogs(allLogs.hours, 'hours');
+      const allDays = sumLogs(allLogs.days, 'days');
+      const rangeHours = sumLogs(rangeLogs.hours, 'hours');
+      const rangeDays = sumLogs(rangeLogs.days, 'days');
+      const allTotal = allHours.total + allDays.total;
+      const rangeTotal = rangeHours.total + rangeDays.total;
 
-      // 多项目时,在总计/本月下加每个项目的小计
+      // 多项目时,本月 card 下加每个项目的小计（按 kind 显示不同格式）
       const breakdown = visibleProjects.length >= 2
         ? visibleProjects.map(p => {
-            const sub = sumLogs(state.logs[p.id] || {});
+            const kind = p.kind || 'hours';
+            const sub = sumLogs(state.logs[p.id] || {}, kind);
+            const val = (kind === 'days')
+              ? `${sub.total} 天`
+              : `${sub.days} 整天 · ${sub.half} 半天`;
             return `<div class="stat-breakdown-row">
               <span class="dot" style="background:${p.color}"></span>
               <span class="name">${escapeHtml(p.name)}</span>
-              <span class="val">${sub.total} 天</span>
+              <span class="val">${val}</span>
             </div>`;
           }).join('')
         : '';
+
+      // 格式化 sub 文字："工时 X 整天 · Y 半天 + 非工时 N 天"
+      function formatSub(hoursSum, daysSum) {
+        const parts = [];
+        if (hoursSum.total > 0) parts.push(`工时 ${formatHoursSub(hoursSum)}`);
+        if (daysSum.total > 0) parts.push(`非工时 ${daysSum.total} 天`);
+        return parts.length > 0 ? parts.join(' + ') : '—';
+      }
 
       const monthLabel = state.viewMode === 'month' ? '本月' :
                          state.viewMode === 'quarter' ? '本季度' : '本年';
       body.innerHTML = `
         <div class="stat-card">
           <div class="stat-label">${monthLabel}</div>
-          <div class="stat-value">${m.total}<span class="unit">天</span></div>
-          <div class="stat-sub">${m.days} 整天 · ${m.half} 半天</div>
+          <div class="stat-value">${rangeTotal}<span class="unit">天</span></div>
+          <div class="stat-sub">${formatSub(rangeHours, rangeDays)}</div>
           ${breakdown ? `<div class="stat-breakdown">${breakdown}</div>` : ''}
         </div>
         <div class="stat-card">
           <div class="stat-label">总计</div>
-          <div class="stat-value">${all.total}<span class="unit">天</span></div>
-          <div class="stat-sub">${all.days} 整天 · ${all.half} 半天</div>
+          <div class="stat-value">${allTotal}<span class="unit">天</span></div>
+          <div class="stat-sub">${formatSub(allHours, allDays)}</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">折合小时</div>
-          <div class="stat-value">${(all.total * HOURS_PER_DAY).toFixed(1)}<span class="unit">h</span></div>
-          <div class="stat-sub">按 1 天 = ${HOURS_PER_DAY}h 估算</div>
+          <div class="stat-value">${allHours.hours.toFixed(1)}<span class="unit">h</span></div>
+          <div class="stat-sub">1 整天 = 8h, 1 半天 = 4h（仅工时类）</div>
         </div>
       `;
     }
@@ -1458,6 +1576,9 @@
     function openModal() {
       document.getElementById('project-name').value = '';
       renderColorPicker();
+      // v0.3.7：重置 kind 选择到默认工时
+      const hoursRadio = document.querySelector('input[name="project-kind"][value="hours"]');
+      if (hoursRadio) hoursRadio.checked = true;
       document.getElementById('project-modal').classList.remove('hidden');
       setTimeout(() => document.getElementById('project-name').focus(), 0);
     }
@@ -1497,8 +1618,11 @@
         alert('已有同名项目，换一个？');
         return;
       }
+      // v0.3.7：读 kind 选择（默认 hours）
+      const kindEl = document.querySelector('input[name="project-kind"]:checked');
+      const kind = kindEl ? kindEl.value : 'hours';
       const id = 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
-      state.projects.push({ id, name, color: getSelectedColor(), visible: true });
+      state.projects.push({ id, name, color: getSelectedColor(), visible: true, kind });
       state.currentProjectId = id;
       saveState();
       closeModal();
