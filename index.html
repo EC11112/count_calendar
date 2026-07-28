@@ -220,16 +220,19 @@
       font-family: inherit;
     }
     .header-icon-btn:hover { background: var(--hover); color: var(--text); }
+    /* v0.3.4+：设置菜单用 fixed 定位 + 打开时算位置
+       - 之前 absolute 相对 .header-actions，拖滑条时 main panel 宽度变化 → 设置按钮位置变 → 弹窗跟着跑
+       - 改成 fixed（相对视口） + 打开时根据按钮的 getBoundingClientRect() 算 top/right
+       - 弹窗位置固定下来，滑条怎么拖弹窗都不动 */
     .settings-menu {
-      position: absolute;
-      top: calc(100% + 6px);
-      right: 0;
+      position: fixed;
+      /* top / right 由 JS 在打开时设置（基于设置按钮位置），关闭时清掉 */
       background: var(--panel);
       border: 1px solid var(--border);
       border-radius: 8px;
       padding: 12px 14px;
       box-shadow: 0 4px 16px rgba(0,0,0,0.08);
-      z-index: 20;
+      z-index: 100;  /* fixed 在所有 panel 上面 */
       min-width: 220px;
     }
     .settings-menu.hidden { display: none; }
@@ -1273,6 +1276,32 @@
     function closeModal() {
       document.getElementById('project-modal').classList.add('hidden');
     }
+
+    // v0.3.4+：设置菜单 open/close helper
+    // - 弹窗是 fixed 定位（相对视口），不会跟 main panel 宽度变化跑位
+    // - 打开时根据设置按钮的 getBoundingClientRect() 算 top/right，弹窗右边缘对齐按钮右边缘
+    // - 关闭时清掉 inline top/right，下次打开重新算（防止 resize 后位置过期）
+    function openSettingsMenu() {
+      const btn = document.getElementById('settings-btn');
+      const menu = document.getElementById('settings-menu');
+      const rect = btn.getBoundingClientRect();
+      // 弹窗在按钮正下方 6px,右边缘跟按钮右边缘对齐
+      menu.style.top = `${rect.bottom + 6}px`;
+      menu.style.right = `${window.innerWidth - rect.right}px`;
+      menu.classList.remove('hidden');
+    }
+    function closeSettingsMenu() {
+      const menu = document.getElementById('settings-menu');
+      menu.classList.add('hidden');
+      // 清掉 inline style,下次打开时按当前按钮位置重新算
+      menu.style.top = '';
+      menu.style.right = '';
+    }
+    function toggleSettingsMenu() {
+      const menu = document.getElementById('settings-menu');
+      if (menu.classList.contains('hidden')) openSettingsMenu();
+      else closeSettingsMenu();
+    }
     function confirmProject() {
       const name = document.getElementById('project-name').value.trim();
       if (!name) { alert('请输入项目名'); return; }
@@ -1297,12 +1326,16 @@
       // 视口缩放时重算布局（季/年视图列数和格子大小、月视图字号、屏占比 main.panel 宽度）
       // v0.3.2：orientationchange 同步触发（竖横屏切换时屏占比 100% / 自适应立即生效）
       // v0.3.4+：滑条 max = window.innerWidth * 0.7，resize 时也要更新
+      // v0.3.4+：如果设置菜单开着,重新算位置（按钮在 viewport 里的坐标变了）
       let _resizeTimer = null;
       const onResize = () => {
         clearTimeout(_resizeTimer);
         _resizeTimer = setTimeout(() => {
           syncCalWidthSlider();
           renderCalendar();
+          if (!settingsMenu.classList.contains('hidden')) {
+            openSettingsMenu();
+          }
         }, 100);
       };
       window.addEventListener('resize', onResize);
@@ -1333,11 +1366,11 @@
       syncCalWidthSlider();
       settingsBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        settingsMenu.classList.toggle('hidden');
+        toggleSettingsMenu();
       });
       document.addEventListener('click', (e) => {
         if (!settingsMenu.contains(e.target) && e.target !== settingsBtn) {
-          settingsMenu.classList.add('hidden');
+          closeSettingsMenu();
         }
       });
       maxColsInput.addEventListener('change', () => {
