@@ -240,56 +240,61 @@
       color: inherit;
     }
 
-    /* ===== Calendar: multi-month (quarter / year) ===== */
-    .multi-months {
-      display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
+    /* ===== Calendar: continuous strip (quarter / year) ===== */
+    .strip-wrap {
+      display: flex;
+      flex-direction: column;
       gap: 12px;
     }
-    .mini-month {
+    .strip-block {
       background: var(--bg);
       border: 1px solid var(--border);
       border-radius: 8px;
       padding: 8px 6px 6px;
-      min-width: 0;
     }
-    .mini-month-header {
+    .strip-block-header {
       display: flex;
-      flex-direction: column;
-      gap: 4px;
+      align-items: center;
+      justify-content: space-between;
       margin-bottom: 6px;
+      padding: 0 4px;
     }
-    .mini-month-name {
+    .strip-block-name {
       font-size: 12px;
       font-weight: 600;
       color: var(--text);
-      text-align: center;
-      padding: 2px 0;
     }
-    .mini-month-name .year-tag {
+    .strip-block-name .year-tag {
       color: var(--text-faint);
       font-weight: 400;
       margin-left: 4px;
       font-size: 11px;
     }
-    .mini-weekdays {
+    .strip-block-name .blank-tag {
+      color: var(--text-faint);
+      font-weight: 400;
+      margin-left: 8px;
+      font-size: 11px;
+    }
+    .weekday-row {
       display: grid;
-      grid-template-columns: repeat(7, 1fr);
-      gap: 1px;
+      grid-template-columns: repeat(var(--cols, 21), minmax(0, 1fr));
+      gap: 2px;
       font-size: 9px;
       color: var(--text-faint);
       text-align: center;
+      margin-bottom: 3px;
     }
-    .mini-weekdays span { padding: 1px 0; }
-    .mini-weekdays span:nth-child(1),
-    .mini-weekdays span:nth-child(7) { color: #ef4444; }
+    .weekday-row span { padding: 1px 0; }
+    .weekday-row span.we { color: #ef4444; }  /* 一/二/三/四/五 默认 */
+    .weekday-row span.wkn { color: #ef4444; } /* 日、六 */
 
-    .mini-days {
+    .day-strip {
       display: grid;
-      grid-template-columns: repeat(7, 1fr);
+      grid-template-columns: repeat(var(--cols, 21), minmax(0, 1fr));
       gap: 2px;
     }
-    .mini-day {
+    .strip-day {
       aspect-ratio: 1 / 1;
       background: var(--panel);
       border: 1px solid var(--border);
@@ -303,12 +308,14 @@
       position: relative;
       min-width: 0;
     }
-    .mini-day.blank { background: transparent; border: 0; cursor: default; }
-    .mini-day.future { cursor: not-allowed; opacity: 0.4; }
-    .mini-day.logged { color: #fff; font-weight: 600; }
-    .mini-day.logged[data-clicks="1"] { color: var(--text); font-weight: 400; }
-    .mini-day.today { box-shadow: 0 0 0 1.5px var(--today-ring) inset; }
-    .mini-day-num { line-height: 1; }
+    .strip-day.blank { background: transparent; border: 0; cursor: default; }
+    .strip-day.future { cursor: not-allowed; opacity: 0.4; }
+    .strip-day.logged { color: #fff; font-weight: 600; }
+    .strip-day.logged[data-clicks="1"] { color: var(--text); font-weight: 400; }
+    .strip-day.today { box-shadow: 0 0 0 1.5px var(--today-ring) inset; }
+    .strip-day-num { line-height: 1; }
+
+    /* 块之间用空白区分（每块是一个 strip 块） */
 
     /* ===== Stats ===== */
     .stats h2 {
@@ -393,12 +400,6 @@
       .app { grid-template-columns: 1fr; height: auto; }
       .panel { max-height: none; }
     }
-    @media (max-width: 700px) {
-      .multi-months { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    }
-    @media (max-width: 480px) {
-      .multi-months { grid-template-columns: 1fr; }
-    }
   </style>
 </head>
 <body>
@@ -432,8 +433,8 @@
         <div class="days" id="days"></div>
       </div>
 
-      <!-- 季/年视图 -->
-      <div class="multi-months" id="multi-months" style="display:none"></div>
+      <!-- 季/年视图：连续 strip 布局 -->
+      <div class="strip-wrap" id="strip-wrap" style="display:none"></div>
     </main>
 
     <section class="panel stats">
@@ -471,17 +472,20 @@
       { id: 'p_default_sport', name: '运动', color: '#10b981' },
       { id: 'p_default_work',  name: '工作', color: '#f59e0b' }
     ];
-    const VIEW_STEP = { month: 1, quarter: 3, year: 12 };
+    const VIEW_STEP  = { month: 1, quarter: 3, year: 12 };
     const VIEW_COUNT = { month: 1, quarter: 3, year: 12 };
+    // 大视图：每行几周（7 的倍数）— 季视图 3 周 / 年视图 4 周
+    const WEEKS_PER_ROW = { month: 1, quarter: 3, year: 4 };
+    const WEEKDAY_NAMES = ['日', '一', '二', '三', '四', '五', '六'];
 
     // ========== State ==========
     let state = {
       projects: [],
       currentProjectId: null,
-      logs: {},          // { projectId: { "YYYY-MM-DD": 0|1|2 } }
+      logs: {},
       viewYear: null,
-      viewMonth: null,   // 0-11
-      viewMode: 'month'  // 'month' | 'quarter' | 'year'
+      viewMonth: null,
+      viewMode: 'month'
     };
 
     // ========== Storage ==========
@@ -539,10 +543,15 @@
       else state.logs[projectId][ds] = clicks;
       saveState();
     }
-    // 加 num 个月到 (y, m)，返回规范化 {y, m}
     function addMonths(y, m, delta) {
       const total = y * 12 + m + delta;
       return { y: Math.floor(total / 12), m: ((total % 12) + 12) % 12 };
+    }
+    // 一年中第几天（0-based，1/1 = 0）。用于 strip 中的位置
+    function dayOfYear(y, m, d) {
+      const start = new Date(y, 0, 1);
+      const cur = new Date(y, m, d);
+      return Math.round((cur - start) / 86400000);
     }
 
     // ========== Render: Sidebar ==========
@@ -590,12 +599,10 @@
 
     // ========== Render: Header (label + view toggle + containers) ==========
     function renderHeader() {
-      // 视图切换按钮 active
       document.querySelectorAll('#view-toggle button').forEach(b => {
         b.classList.toggle('active', b.dataset.view === state.viewMode);
       });
 
-      // label
       let label = '';
       if (state.viewMode === 'month') {
         label = `${state.viewYear} 年 ${state.viewMonth + 1} 月`;
@@ -612,12 +619,11 @@
       }
       document.getElementById('month-label').textContent = label;
 
-      // 容器显隐
       const single = document.getElementById('single-view');
-      const multi  = document.getElementById('multi-months');
+      const strip  = document.getElementById('strip-wrap');
       const isSingle = state.viewMode === 'month';
       single.style.display = isSingle ? '' : 'none';
-      multi.style.display  = isSingle ? 'none' : '';
+      strip.style.display  = isSingle ? 'none' : '';
     }
 
     // ========== Render: Single Month ==========
@@ -681,91 +687,165 @@
       }
     }
 
-    // ========== Render: Multi-Month (quarter / year) ==========
-    function buildMiniMonth(year, month) {
-      const wrap = document.createElement('div');
-      wrap.className = 'mini-month';
+    // ========== Render: Continuous Strip (quarter / year) ==========
+    // 把一组连续月份流式展开成 strip
+    // 每个月：1号用前缀空对齐到对应周几
+    // 一行 weeksPerRow 周（7 × weeksPerRow 列），自动换行
+    function buildStripBlock(months, weeksPerRow) {
+      // months: [{y, m}, ...]
+      // 返回 strip 数据：{ cols, weekdayRow: [7*N], cells: [{y,m,d,blank,date,isMonthStart}...] }
+      const cols = 7 * weeksPerRow;
+      const weekdayRow = [];
+      for (let i = 0; i < weeksPerRow; i++) {
+        for (let d = 0; d < 7; d++) {
+          weekdayRow.push(d === 0 || d === 6 ? 'wkn' : 'we');
+        }
+      }
+      // weekday 标签文本（每 7 一组，每月 7 个：日一二三四五六）
+      // 我们已经在 CSS 用 .we/.wkn class 表示类型，不在这里放文字
+      // 不过用户要"日 一 二 三 四 五 六"显示，所以这里我们放纯文本
+      const weekdayLabels = [];
+      for (let i = 0; i < weeksPerRow; i++) {
+        for (let d = 0; d < 7; d++) {
+          weekdayLabels.push(WEEKDAY_NAMES[d]);
+        }
+      }
 
-      const firstDay = new Date(year, month, 1).getDay();
-      const lastDate = new Date(year, month + 1, 0).getDate();
+      const cells = [];
+      for (const { y, m } of months) {
+        const firstDow = new Date(y, m, 1).getDay();  // 0=日
+        const lastDate = new Date(y, m + 1, 0).getDate();
+        for (let i = 0; i < firstDow; i++) {
+          cells.push({ blank: true });
+        }
+        for (let d = 1; d <= lastDate; d++) {
+          cells.push({ y, m, d, date: dateStr(y, m, d), blank: false });
+        }
+      }
+      // 末尾补空到 cols 倍数
+      while (cells.length % cols !== 0) cells.push({ blank: true });
+
+      return { cols, weekdayLabels, cells, months };
+    }
+
+    function buildStripCell(cellData, todayKey, proj) {
+      const cell = document.createElement('div');
+      cell.className = 'strip-day';
+      if (cellData.blank) {
+        cell.classList.add('blank');
+        return cell;
+      }
+      const { y, m, d, date: ds } = cellData;
+      cell.setAttribute('role', 'button');
+      cell.setAttribute('tabindex', '0');
+      cell.dataset.date = ds;
+      cell.setAttribute('aria-label', `${y}年${m+1}月${d}日`);
+      if (ds === todayKey) cell.classList.add('today');
+      if (ds > todayKey) cell.classList.add('future');
+
+      if (proj) {
+        const clicks = getClicks(proj.id, ds);
+        if (clicks > 0) {
+          const alpha = clicks === 1 ? 0.28 : 0.85;
+          cell.style.background = hexToRgba(proj.color, alpha);
+          cell.classList.add('logged');
+          cell.dataset.clicks = String(clicks);
+        }
+      }
+      const num = document.createElement('span');
+      num.className = 'strip-day-num';
+      num.textContent = d;
+      cell.appendChild(num);
+
+      if (proj && ds <= todayKey) {
+        cell.addEventListener('click', () => {
+          const cur = getClicks(proj.id, ds);
+          const next = (cur + 1) % 3;
+          setClicks(proj.id, ds, next);
+          renderCalendar();
+          renderStats();
+        });
+      }
+      return cell;
+    }
+
+    function renderStrip() {
+      const wrap = document.getElementById('strip-wrap');
+      wrap.innerHTML = '';
+      const count = VIEW_COUNT[state.viewMode];
+      const weeksPerRow = WEEKS_PER_ROW[state.viewMode];
       const now = new Date();
       const todayKey = dateStr(now.getFullYear(), now.getMonth(), now.getDate());
       const proj = getProject(state.currentProjectId);
 
-      // header
-      const header = document.createElement('div');
-      header.className = 'mini-month-header';
-      const yearTag = (year !== state.viewYear) ? `<span class="year-tag">${year}</span>` : '';
-      header.innerHTML = `
-        <div class="mini-month-name">${month + 1}月${yearTag}</div>
-        <div class="mini-weekdays">
-          <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
-        </div>
-      `;
-      wrap.appendChild(header);
+      // 决定每个月"标签块"
+      // 季视图：1 块（3 个月一起）
+      // 年视图：按 4 个月一组（每行 4 月）？或按 3 个月一组？
+      //  为了视觉清晰，按 monthsPerBlock 分组：季视图全 1 块，年视图 3 块（每 4 月一块）
+      const monthsPerBlock = state.viewMode === 'quarter' ? 3 : 4;
 
-      // days
-      const days = document.createElement('div');
-      days.className = 'mini-days';
-      for (let i = 0; i < firstDay; i++) {
-        const b = document.createElement('div');
-        b.className = 'mini-day blank';
-        days.appendChild(b);
-      }
-      for (let d = 1; d <= lastDate; d++) {
-        const ds = dateStr(year, month, d);
-        const cell = document.createElement('div');
-        cell.className = 'mini-day';
-        cell.setAttribute('role', 'button');
-        cell.setAttribute('tabindex', '0');
-        cell.dataset.date = ds;
-        cell.setAttribute('aria-label', `${year}年${month+1}月${d}日`);
-        if (ds === todayKey) cell.classList.add('today');
-        if (ds > todayKey) cell.classList.add('future');
-
-        if (proj) {
-          const clicks = getClicks(proj.id, ds);
-          if (clicks > 0) {
-            const alpha = clicks === 1 ? 0.28 : 0.85;
-            cell.style.background = hexToRgba(proj.color, alpha);
-            cell.classList.add('logged');
-            cell.dataset.clicks = String(clicks);
-          }
-        }
-
-        const num = document.createElement('span');
-        num.className = 'mini-day-num';
-        num.textContent = d;
-        cell.appendChild(num);
-
-        if (proj && ds <= todayKey) {
-          cell.addEventListener('click', () => {
-            const cur = getClicks(proj.id, ds);
-            const next = (cur + 1) % 3;
-            setClicks(proj.id, ds, next);
-            renderCalendar();
-            renderStats();
-          });
-        }
-        days.appendChild(cell);
-      }
-      wrap.appendChild(days);
-      return wrap;
-    }
-
-    function renderMultiMonths() {
-      const count = VIEW_COUNT[state.viewMode];
-      const container = document.getElementById('multi-months');
-      container.innerHTML = '';
+      const allMonths = [];
       for (let i = 0; i < count; i++) {
         const { y, m } = addMonths(state.viewYear, state.viewMonth, i);
-        container.appendChild(buildMiniMonth(y, m));
+        allMonths.push({ y, m });
       }
+      const blocks = [];
+      for (let i = 0; i < allMonths.length; i += monthsPerBlock) {
+        blocks.push(allMonths.slice(i, i + monthsPerBlock));
+      }
+
+      blocks.forEach((blockMonths, blockIdx) => {
+        const block = document.createElement('div');
+        block.className = 'strip-block';
+
+        // 块标题：months[0] 范围
+        const m0 = blockMonths[0];
+        const mN = blockMonths[blockMonths.length - 1];
+        const header = document.createElement('div');
+        header.className = 'strip-block-header';
+        const yearTag0 = (m0.y !== state.viewYear) ? `<span class="year-tag">${m0.y}</span>` : '';
+        const yearTagN = (mN.y !== m0.y) ? `<span class="year-tag">${mN.y}</span>` : '';
+        const rangeLabel = (m0.y === mN.y)
+          ? `${m0.m + 1}–${mN.m + 1} 月${yearTag0}`
+          : `${m0.m + 1} 月${yearTag0} – ${mN.m + 1} 月${yearTagN}`;
+        const blankInfo = `<span class="blank-tag">共 ${blockMonths.length} 个月 · ${weeksPerRow} 周/行</span>`;
+        header.innerHTML = `
+          <span class="strip-block-name">${rangeLabel}</span>
+          ${blankInfo}
+        `;
+        block.appendChild(header);
+
+        const data = buildStripBlock(blockMonths, weeksPerRow);
+        // weekday row
+        const wdRow = document.createElement('div');
+        wdRow.className = 'weekday-row';
+        wdRow.style.setProperty('--cols', data.cols);
+        data.weekdayLabels.forEach((label, i) => {
+          const span = document.createElement('span');
+          // class 用 we/wkn 标颜色（CSS 中 wkn 红）
+          const isWkn = (i % 7 === 0) || (i % 7 === 6);
+          span.className = isWkn ? 'wkn' : 'we';
+          span.textContent = label;
+          wdRow.appendChild(span);
+        });
+        block.appendChild(wdRow);
+
+        // day strip
+        const strip = document.createElement('div');
+        strip.className = 'day-strip';
+        strip.style.setProperty('--cols', data.cols);
+        data.cells.forEach(c => {
+          strip.appendChild(buildStripCell(c, todayKey, proj));
+        });
+        block.appendChild(strip);
+
+        wrap.appendChild(block);
+      });
     }
 
     function renderCalendar() {
       if (state.viewMode === 'month') renderSingleMonth();
-      else renderMultiMonths();
+      else renderStrip();
     }
 
     // ========== Render: Stats ==========
@@ -797,7 +877,6 @@
           if (k.startsWith(monthPrefix)) monthLogs[k] = v;
         });
       } else {
-        // 季/年视图：显示当前视图窗口内的统计
         const count = VIEW_COUNT[state.viewMode];
         for (let i = 0; i < count; i++) {
           const { y, m } = addMonths(state.viewYear, state.viewMonth, i);
