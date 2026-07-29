@@ -55,6 +55,14 @@
   - HTML 结构统一成 `<span class="btn-icon">前缀</span><span>文本</span>`，便于后续单独替换图标或文本
 - `renderSidebarBottomButton()` 重构：只换文本部分 + 切 `btn-primary` / `btn-danger` class
 
+### 7. 紧急修复：state 对象 SyntaxError
+
+- v0.3.11 加 `dismissedIntro` 时漏了 `calPanelWidth: null` 后的逗号
+- 整个 `<script>` 解析失败 → init() 没运行 → 所有按钮无反应
+- 表现：旧数据浏览器打开 v0.3.11 后页面只剩静态 HTML，按钮 hover 有视觉反馈但点了不动
+- 修复：加回那个逗号
+- **教训**：以后加 state 字段时要把整段 object literal 放一起检查，不能在 v0.3.X 旧代码尾巴上直接加
+
 ## v0.3.10 — 2026-07-29
 
 **数据导出/导入 (跨浏览器迁移 + 备份) + 数据结构优化**
