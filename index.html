@@ -694,10 +694,45 @@
       margin-left: 2px;
     }
     .color-picker {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-bottom: 16px;
+    }
+    /* v0.3.11：自定义颜色行 —— color input 配标签,跟 swatch 视觉对齐 */
+    .color-custom-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .color-custom-input {
+      width: 32px;
+      height: 32px;
+      border: 2px solid var(--border);
+      border-radius: 6px;
+      cursor: pointer;
+      padding: 0;
+      background: transparent;
+      /* 隐藏 native picker 的 dropdown 箭头 (Chrome/Webkit) */
+      -webkit-appearance: none;
+      -moz-appearance: none;
+      appearance: none;
+    }
+    .color-custom-input::-webkit-color-swatch-wrapper { padding: 0; border-radius: 4px; }
+    .color-custom-input::-webkit-color-swatch { border: none; border-radius: 4px; }
+    .color-custom-input::-moz-color-swatch { border: none; border-radius: 4px; }
+    .color-custom-input.selected {
+      border-color: var(--text);
+      transform: scale(1.1);
+    }
+    .color-custom-label {
+      font-size: 12px;
+      color: var(--text-soft);
+    }
+    .color-presets {
       display: grid;
       grid-template-columns: repeat(8, 1fr);
       gap: 6px;
-      margin-bottom: 16px;
     }
     .swatch {
       aspect-ratio: 1 / 1;
@@ -2032,11 +2067,43 @@
     }
 
     // ========== Color Picker ==========
-    // selectedColor (v0.3.9)：可传入一个预选色,用于"编辑项目"时回填当前颜色
+    // v0.3.9：selectedColor 预选色,用于"编辑项目"回填
+    // v0.3.11：拆成"自定义取色板 + 预设色板"两部分
+    //   - 顶部：原生 <input type="color"> 取色器,显示当前色,点击打开系统取色板
+    //   - 底部：16 预设色 swatch 网格
+    //   - 互斥：选了自定义就取消预设高亮,反之亦然
+    //   - 选中态用边框颜色 + 缩放 1.1x 跟 swatch 一致
     function renderColorPicker(selectedColor) {
       const picker = document.getElementById('color-picker');
       picker.innerHTML = '';
       const sel = selectedColor || COLORS[0];
+      // 是否选中了自定义颜色（在 COLORS 里找不到）
+      const isCustom = !COLORS.includes(sel);
+
+      // 1. 自定义颜色行
+      const customRow = document.createElement('div');
+      customRow.className = 'color-custom-row';
+      const customInput = document.createElement('input');
+      customInput.type = 'color';
+      customInput.id = 'custom-color-input';
+      customInput.className = 'color-custom-input' + (isCustom ? ' selected' : '');
+      customInput.value = sel;
+      customInput.title = '自定义颜色（点击打开系统取色板）';
+      // v0.3.11：用户改了自定义颜色 → 取消所有预设高亮,自定义变 selected
+      customInput.addEventListener('input', () => {
+        picker.querySelectorAll('.color-presets .swatch').forEach(s => s.classList.remove('selected'));
+        customInput.classList.add('selected');
+      });
+      const customLabel = document.createElement('span');
+      customLabel.className = 'color-custom-label';
+      customLabel.textContent = '自定义颜色';
+      customRow.appendChild(customInput);
+      customRow.appendChild(customLabel);
+      picker.appendChild(customRow);
+
+      // 2. 预设色网格
+      const presetGrid = document.createElement('div');
+      presetGrid.className = 'color-presets';
       COLORS.forEach((c) => {
         const sw = document.createElement('button');
         sw.className = 'swatch' + (c === sel ? ' selected' : '');
@@ -2044,15 +2111,24 @@
         sw.dataset.color = c;
         sw.type = 'button';
         sw.addEventListener('click', () => {
-          picker.querySelectorAll('.swatch').forEach(s => s.classList.remove('selected'));
+          picker.querySelectorAll('.color-presets .swatch').forEach(s => s.classList.remove('selected'));
+          customInput.classList.remove('selected');
           sw.classList.add('selected');
+          // v0.3.11：选了预设色后,同步更新自定义 input 的 value (下一步想再微调可以直接拖)
+          customInput.value = c;
         });
-        picker.appendChild(sw);
+        presetGrid.appendChild(sw);
       });
+      picker.appendChild(presetGrid);
     }
+    // v0.3.11：getSelectedColor 兼容自定义颜色选中态
+    //   优先返回选中的 swatch (预设),否则返回自定义 input 的 value
     function getSelectedColor() {
       const sel = document.querySelector('#color-picker .swatch.selected');
-      return sel ? sel.dataset.color : COLORS[0];
+      if (sel) return sel.dataset.color;
+      const custom = document.getElementById('custom-color-input');
+      if (custom && custom.classList.contains('selected')) return custom.value;
+      return COLORS[0];
     }
 
     // ========== Wire up ==========

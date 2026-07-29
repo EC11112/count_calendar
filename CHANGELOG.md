@@ -98,6 +98,17 @@
 - toast 反馈更具体：`已清除 N 个项目 + M 条日志，欢迎弹窗下次会重新显示`
 - 欢迎页"清除数据"section 描述同步更新
 
+### 11. 项目颜色：自定义颜色 + 系统取色板
+
+- 项目 modal 顶部加 `<input type="color">` 自定义取色器（label "自定义颜色"）
+- 跟预设色 swatch 互斥选中：选了自定义就取消所有预设高亮,反之亦然
+- 选中态视觉一致：自定义 input / 预设 swatch 都用 1px 边框 + 1.1x 缩放
+- 选了预设色后,自定义 input 的 value 同步更新（想微调可以直接拖）
+- 选自定义色后,如果该色恰好在预设列表里,自动标预设高亮;不在则标自定义高亮
+- `getSelectedColor()` 兼容自定义色：优先 swatch,否则 input.value,最后回退到 COLORS[0]
+- 编辑项目时如果项目用的是自定义色（非 COLORS 里的色），会自动把自定义 input 的 value 设成项目色 + 标 selected
+- CSS 优化：`.color-picker` 从 grid 改成 flex column,拆出 `.color-custom-row` 和 `.color-presets`；自定义 input 隐藏 native dropdown 箭头,跟 swatch 视觉对齐
+
 ## v0.3.10 — 2026-07-29
 
 **数据导出/导入 (跨浏览器迁移 + 备份) + 数据结构优化**
