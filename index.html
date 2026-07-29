@@ -897,9 +897,9 @@
       fullscreen: true,
       // v0.3.4+：日历面板 mainW 滑条值（null = 自动用 cellUiW 公式）
       // 范围 7*maxCellSize*1.1 ~ appW*0.7，step 10
-      calPanelWidth: null,
-      // v0.3.9：项目编辑模式 —— sidebar 进入"项目编辑"模式,每个项目显示 edit + del 按钮(替代 eye)
-      projectEditMode: false
+      calPanelWidth: null
+      // v0.3.9.x：项目编辑模式 projectEditMode 不放在 state 里 —— 它是临时 UI 状态,
+      //   刷新/切换 active 自动退出,不该持久化. 改为模块级 let _projectEditMode
     };
 
     // v0.3.0-v0.3.3 旧版屏占比档位（仅 migration 用，把旧值映射到新全屏开关）
@@ -926,8 +926,9 @@
       state.projects.forEach(p => { if (p.visible === undefined) p.visible = true; });
       // v0.3.7：每个 project 加 kind 字段（默认 'hours' 工时类），老数据 migration
       state.projects.forEach(p => { if (p.kind === undefined) p.kind = 'hours'; });
-      // v0.3.9：项目编辑模式开关 (默认 false = 正常模式,只显示 eye 按钮)
-      if (typeof state.projectEditMode !== 'boolean') state.projectEditMode = false;
+      // v0.3.9.1：项目编辑模式 (projectEditMode) 不再入 state —— 删掉老数据里的残留字段
+      //   之前的版本误把 _projectEditMode 当成持久字段存了 localStorage,这次彻底切到模块变量
+      delete state.projectEditMode;
       if (!state.logs || typeof state.logs !== 'object') state.logs = {};
       const now = new Date();
       if (state.viewYear == null || state.viewYear < 1900) state.viewYear = now.getFullYear();
@@ -1032,15 +1033,17 @@
     }
 
     // ========== Render: Sidebar ==========
-    // v0.3.9：项目编辑模式 —— state.projectEditMode=true 时,所有项目右侧只显示 edit + del 按钮(替代 eye)
+    // v0.3.9：项目编辑模式 —— _projectEditMode=true 时,所有项目右侧只显示 edit + del 按钮(替代 eye)
+    // v0.3.9.1：_projectEditMode 是模块级变量 (不入 state,不入 localStorage)
+    //   - 刷新页面 / 切换 active 项目 都自动退出
     //   - 进入: 点 sidebar 底部的"编辑项目"按钮(变成红色"退出编辑")
-    //   - 退出: 再点一次底部按钮,或点其它任何地方都不影响,只能再点底部按钮退出
-    //   - 平时 (projectEditMode=false): 每个项目只显示 eye (可见性切换)
+    //   - 退出: 再点一次底部按钮,或刷新/切换 active
+    //   - 平时 (_projectEditMode=false): 每个项目只显示 eye (可见性切换)
     function renderProjects() {
       const list = document.getElementById('project-list');
       list.innerHTML = '';
       // v0.3.9：edit-mode 类控制按钮显隐 (CSS 里有 .project-list.edit-mode .eye { display: none } 等)
-      list.classList.toggle('edit-mode', !!state.projectEditMode);
+      list.classList.toggle('edit-mode', !!_projectEditMode);
       if (state.projects.length === 0) {
         list.innerHTML = '<li style="color:var(--text-faint);font-size:12px;padding:8px 10px;">还没有项目</li>';
         renderSidebarBottomButton();
@@ -1051,11 +1054,11 @@
         const isActive = p.id === state.currentProjectId;
         const isHidden = p.visible === false;
         li.className = 'project-item' + (isActive ? ' active' : '') + (isHidden ? ' hidden-project' : '');
-        // v0.3.9：根据 projectEditMode 决定渲染哪些按钮
+        // v0.3.9：根据 _projectEditMode 决定渲染哪些按钮
         //   - normal: eye (显隐)
         //   - edit mode: edit (编辑项目) + del (删除,2 段式)
         let buttonsHtml;
-        if (state.projectEditMode) {
+        if (_projectEditMode) {
           buttonsHtml = `
             <button class="edit" data-id="${p.id}" title="编辑项目">✎</button>
             <button class="del" data-id="${p.id}" title="删除项目 (再点一次确认)">×</button>
@@ -1074,10 +1077,14 @@
           // 任何按钮 (eye/edit/del) 都不触发 active 切换
           if (e.target.closest('button')) return;
           state.currentProjectId = p.id;
+          // v0.3.9.1：切换 active 项目时自动退出编辑模式
+          //   理由: "切 active" 意味着"我要用这个项目了",跟"还在编辑模式"语义冲突
+          //   防止用户切到 B 项目后还在 edit 模式,一不小心点了 B 的 del/edit
+          if (_projectEditMode) _projectEditMode = false;
           saveState();
           renderAll();
         });
-        if (state.projectEditMode) {
+        if (_projectEditMode) {
           // v0.3.9：edit 按钮 —— 复用新建项目弹窗,预填当前名称/颜色/类型
           li.querySelector('.edit').addEventListener('click', (e) => {
             e.stopPropagation();
@@ -1112,10 +1119,11 @@
       renderSidebarBottomButton();
     }
     // v0.3.9：sidebar 底部"编辑项目"/"退出编辑"按钮的状态切换
+    // v0.3.9.1：读模块级 _projectEditMode (不再是 state.projectEditMode)
     function renderSidebarBottomButton() {
       const btn = document.getElementById('toggle-edit-projects');
       if (!btn) return;
-      if (state.projectEditMode) {
+      if (_projectEditMode) {
         btn.textContent = '退出编辑';
         btn.classList.add('btn-danger');
       } else {
@@ -1571,6 +1579,10 @@
     // v0.3.9：项目 modal 当前模式 —— null = 新建,字符串 = 正在编辑该 id 的项目
     // 不存 state(临时 UI 状态,刷新后回到默认)
     let _editingProjectId = null;
+    // v0.3.9.1：项目编辑模式 (sidebar 底部按钮切换的) —— 临时 UI 状态
+    //   - 刷新页面 / 切换 active 项目都自动退出 (li click handler 里设回 false)
+    //   - 不入 state,不入 localStorage (防止刷新后忘记自己开了 edit 模式误删)
+    let _projectEditMode = false;
     function showToast(msg, type) {
       const el = document.getElementById('toast');
       if (!el) return;
@@ -1966,10 +1978,10 @@
       });
 
       document.getElementById('add-project').addEventListener('click', openModal);
-      // v0.3.9：项目编辑模式切换按钮 —— toggle state.projectEditMode + re-render sidebar
+      // v0.3.9.1：项目编辑模式切换按钮 —— toggle 模块级 _projectEditMode + re-render sidebar
+      //   不调 saveState —— 临时 UI 状态不入 localStorage,刷新自动退出
       document.getElementById('toggle-edit-projects').addEventListener('click', () => {
-        state.projectEditMode = !state.projectEditMode;
-        saveState();
+        _projectEditMode = !_projectEditMode;
         renderProjects();
       });
       document.getElementById('cancel-project').addEventListener('click', closeModal);

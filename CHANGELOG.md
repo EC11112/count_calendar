@@ -1,5 +1,52 @@
 # Changelog
 
+## v0.3.9.1 — 2026-07-29
+
+**项目编辑模式 → 临时 UI 状态,刷新/切 active 自动退出**
+
+v0.3.9 那个 commit 把 `projectEditMode` 当成持久字段存在 `state` 里,导致用户刷新后还在编辑模式 —— 万一忘了自己在 edit 模式,点错就删项目. 这版彻底修掉.
+
+---
+
+**1. 改为模块级变量 (不入 state,不入 localStorage)**
+
+- 之前: `state.projectEditMode: false` (跟 maxCellSize 一样的持久字段)
+- 现在: `let _projectEditMode = false` (跟 _editingProjectId 一样的临时 UI 状态)
+- 行为变化:
+  - **页面刷新 → 一定回到 normal 模式** (因为 _projectEditMode 是 JS 内存变量,页面一刷新就回到默认 false)
+  - 不再写入 localStorage,刷新后数据里也不会留这个字段
+  - 迁移: `delete state.projectEditMode` 把老数据里的残留字段清掉
+
+---
+
+**2. 切换 active 项目时也自动退出编辑模式**
+
+- 之前: 在 edit 模式点任意项目的名字 (不是按钮),只会切 active,还留在 edit 模式
+- 现在: 切 active 的同时 `_projectEditMode = false`
+- 理由: "切 active" 跟 "我正在改/删这个项目" 在语义上是冲突的
+  - 切到 B 项目说明"我要用 B 了",不是"我要编辑 B"
+  - 万一 B 已经被点开 modal 在 edit 模式,容易误点 B 的 del/edit
+  - 退出安全,需要再点"编辑项目"按钮重新进
+
+---
+
+**3. 实施细节**
+
+- `renderProjects` / `renderSidebarBottomButton` 改读 `_projectEditMode` (模块变量,作用域内直接访问)
+- 底部按钮 init handler 去掉 `saveState()` 调用 (不再需要持久化)
+- li click handler 加 `if (_projectEditMode) _projectEditMode = false;` 切 active 时退出
+- migration 里加 `delete state.projectEditMode;` 清掉老数据 (避免 `Object.assign(state, parsed)` 把残留值塞回来)
+
+---
+
+**行为变化 (用户能感知)**:
+
+- 刷新页面: 即使上一次停在 edit 模式,刷新后一定回到 normal (眼按钮显示,没有 ✎×)
+- 切换项目: 点任意项目名字立刻退出 edit 模式
+- 之前 v0.3.9 的所有功能不变: 底部按钮 toggle / 模态复用 / 2 段删除 / 颜色预选,等等
+
+---
+
 ## v0.3.9 — 2026-07-29
 
 **项目编辑模式 (sidebar "编辑项目" 按钮) + 删除 2 段确认 + 复用 modal 做编辑**
