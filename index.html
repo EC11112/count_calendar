@@ -880,6 +880,7 @@
     <section class="panel stats">
       <div class="stats-actions">
         <button id="edit-toggle" class="header-icon-btn" title="编辑模式（刷新自动关闭）：关时点击日历不会修改记录，开时点击切换 active 项目在该日期的状态（工时类 0→半天→整天，非工时类 0→√）" aria-label="编辑模式">✎</button>
+        <button id="help-btn" class="header-icon-btn" title="帮助：重新打开功能介绍弹窗" aria-label="帮助">?</button>
         <button id="settings-btn" class="header-icon-btn" title="设置" aria-label="设置">⚙</button>
       </div>
       <h2 id="stats-title">统计</h2>
@@ -2396,6 +2397,12 @@
       document.getElementById('intro-confirm').addEventListener('click', () => closeIntro(true));
       introModal.addEventListener('click', (e) => {
         if (e.target.id === 'intro-modal') closeIntro(false);
+      });
+      // v0.3.11：帮助按钮 —— 主动打开欢迎弹窗 (重置 checkbox, 不动 dismissedIntro)
+      //   用户已经"不再提醒"后想再看功能说明,点 ? 即可
+      document.getElementById('help-btn').addEventListener('click', () => {
+        introCheckbox.checked = false;
+        introModal.classList.remove('hidden');
       });
 
       // v0.3.11：首次加载时,如果用户没勾选过"不再提醒",自动弹欢迎页
