@@ -499,6 +499,31 @@
       background: var(--hover);
       color: var(--text);
     }
+    /* v0.3.15：本地同步 section 样式 —— 文件名 + 按钮横向排列, 状态文字 */
+    .sync-section { margin-top: 4px; }
+    .settings-section-title {
+      margin: 0 0 4px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .settings-row-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .settings-file-name {
+      font-size: 11px;
+      color: var(--text-soft);
+      max-width: 140px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .settings-file-name.configured {
+      color: var(--accent);
+      font-weight: 500;
+    }
 
     /* ===== Calendar: unified component (月/季/年共用) =====
        v0.3.4 重构：之前 .weekdays+.days (月) 和 .weekday-row+.day-strip (季/年) 两套，
@@ -930,6 +955,59 @@
             <button class="btn btn-ghost btn-compact" id="import-data-btn" title="从 JSON 文件恢复数据 (会覆盖当前所有数据)">导入数据</button>
           </div>
           <p class="settings-hint">跨浏览器迁移、备份恢复用；导入会覆盖当前所有数据。</p>
+          <!-- v0.3.15：本地同步 (File System Access API) ——
+               选本地 JSON 文件做自动备份：启动时自动导入, 可选开启每 N 秒自动导出
+               限制: Chrome/Edge 86+, HTTPS/localhost, 需用户授权 picker
+               handle 存 IndexedDB 跨 session 复用 (Chrome 102+) -->
+          <div class="settings-divider"></div>
+          <div class="sync-section" id="sync-section">
+            <p class="settings-section-title">⇄ 本地同步</p>
+            <p class="settings-hint">
+              选一个本地 JSON 文件做自动备份。启动时自动读入对比;
+              开启自动导出后, 每 <span id="sync-interval-display">5</span> 秒对比一次,
+              当前数据有变化就写回文件。
+              <br><b>需 Chrome / Edge 86+ + HTTPS 或 localhost</b>。Firefox / Safari / file:// 不支持。
+            </p>
+            <div class="settings-row">
+              <span>
+                导入文件
+                <span class="settings-inline-hint" title="选一个本地 JSON 文件作为数据源。启动时自动读取, 跟当前数据对比, 不一致会提示导入。">?</span>
+              </span>
+              <div class="settings-row-actions">
+                <span class="settings-file-name" id="sync-import-name">(未选)</span>
+                <button class="btn btn-ghost btn-compact" id="sync-import-btn">选择文件...</button>
+              </div>
+            </div>
+            <div class="settings-row">
+              <span>
+                导出位置
+                <span class="settings-inline-hint" title="选一个本地 JSON 文件作为导出目标。开启自动导出后, 每 N 秒对比当前数据和文件内容, 不一致就写回。">?</span>
+              </span>
+              <div class="settings-row-actions">
+                <span class="settings-file-name" id="sync-export-name">(未选)</span>
+                <button class="btn btn-ghost btn-compact" id="sync-export-btn">选择位置...</button>
+              </div>
+            </div>
+            <label class="settings-row">
+              <span>
+                自动导出
+                <span class="settings-inline-hint" title="开启后, 每 N 秒对比当前数据和导出文件, 不一致就自动写回文件。关闭后只手动触发。">?</span>
+              </span>
+              <input type="checkbox" id="sync-enabled-input">
+            </label>
+            <label class="settings-row">
+              <span>
+                导出间隔 (秒)
+                <span class="settings-inline-hint" title="自动导出的检查间隔, 单位秒。范围 1-300, 默认 5。太短可能频繁写文件。">?</span>
+              </span>
+              <input type="number" id="sync-interval-input" min="1" max="300" step="1">
+            </label>
+            <div class="settings-row settings-row-buttons">
+              <button class="btn btn-ghost btn-compact" id="sync-trigger-export-btn" title="立即把当前数据写入导出文件 (不等到下次自动检查)">立即导出</button>
+              <button class="btn btn-ghost btn-compact" id="sync-clear-btn" title="清掉导入/导出 handle, 关闭所有同步功能">取消同步</button>
+            </div>
+            <p class="settings-hint" id="sync-status">未配置同步</p>
+          </div>
         </div>
       </div>
 
@@ -948,6 +1026,7 @@
         <button id="edit-toggle" class="header-icon-btn" title="编辑模式（刷新自动关闭）：关时点击日历不会修改记录，开时点击切换 active 项目在该日期的状态（工时类 0→半天→整天，非工时类 0→√）" aria-label="编辑模式">✎</button>
         <button id="help-btn" class="header-icon-btn" title="帮助：重新打开功能介绍弹窗" aria-label="帮助">?</button>
         <button id="install-btn" class="header-icon-btn" title="下载 / 部署为本地应用（浏览器支持 PWA 时优先弹安装提示）" aria-label="下载/部署">↓</button>
+        <button id="sync-btn" class="header-icon-btn" title="本地同步 (File System Access API)：选本地 JSON 文件, 启动时自动导入 + 每 N 秒自动对比导出。需要 Chrome/Edge 86+ + HTTPS 或 localhost" aria-label="本地同步">⇄</button>
         <button id="settings-btn" class="header-icon-btn" title="设置" aria-label="设置">⚙</button>
       </div>
       <h2 id="stats-title">统计</h2>
@@ -1025,6 +1104,10 @@
           <h4>⚙ 设置与数据</h4>
           <p>右上 ⚙ 菜单可切换<b>全屏 / 调整日历宽度</b>,以及<b>导出 / 导入 JSON</b> 用于跨浏览器迁移和备份。</p>
         </div>
+        <div class="intro-section">
+          <h4>⇄ 本地同步</h4>
+          <p>顶部 <b>⇄</b> 按钮打开本地同步: 选一个 JSON 文件做自动备份。启动时自动读入对比;开启自动导出后,每 N 秒对比一次,数据有变化就写回文件。需 <b>Chrome/Edge 86+ + HTTPS</b>。</p>
+        </div>
       </div>
       <div class="intro-footer">
         <label class="intro-checkbox">
@@ -1044,7 +1127,7 @@
     //   - appVersion: 跟着代码走 (const),导出时写入,用来跟用户沟通时定位版本
     //   - schemaVersion: 数据结构版本,导入时校验,未来加字段时升 v2 并写 migration
     // 关系: 一次代码部署对应一个 APP_VERSION;同一个 APP_VERSION 下 schema 多次升级也是可能的
-    const APP_VERSION = '0.3.14';
+    const APP_VERSION = '0.3.15';
     const SCHEMA_VERSION = 1;
     const HOURS_PER_DAY = 8;
     const COLORS = [
@@ -1171,7 +1254,13 @@
       dismissedIntro: false,
       // v0.3.14：隐藏下载按钮 (默认 false = 显示,勾选后隐藏顶部的 ↓ 下载/部署按钮)
       //   适用场景: 用户不需要这个功能 (如工作电脑统一管理应用部署), 关掉让顶部更简洁
-      hideDownloadButton: false
+      hideDownloadButton: false,
+      // v0.3.15：本地同步 (File System Access API) 用户配置
+      //   开启 + 选了导入文件: 启动时自动读文件 → 跟当前 state 对比 → 不一致就提示导入
+      //   开启 + 选了导出文件 + syncEnabled: 每 syncInterval 秒对比 → 不一致就写文件
+      //   handle 不存 state (不能 JSON 序列化), 单独存 IndexedDB
+      syncEnabled: false,
+      syncInterval: 5  // 自动导出间隔, 秒
     };
 
     // v0.3.0-v0.3.3 旧版屏占比档位（仅 migration 用，把旧值映射到新全屏开关）
@@ -1258,6 +1347,9 @@
       if (typeof state.dismissedIntro !== 'boolean') state.dismissedIntro = false;
       // v0.3.14：隐藏下载按钮 hideDownloadButton 默认 false (显示) —— 老数据没这个字段,补上
       if (typeof state.hideDownloadButton !== 'boolean') state.hideDownloadButton = false;
+      // v0.3.15：本地同步配置 (handle 不在这里, IndexedDB 存)
+      if (typeof state.syncEnabled !== 'boolean') state.syncEnabled = false;
+      if (typeof state.syncInterval !== 'number' || state.syncInterval < 1) state.syncInterval = 5;
       saveState();
     }
     function saveState() {
@@ -2025,6 +2117,354 @@
       _installPromptEvent = null;
       showToast('已成功安装为本地应用');
     });
+
+    // ========== v0.3.15：本地同步 (File System Access API) ==========
+    // 浏览器 JS 不能直接写文件到指定磁盘路径, 能做的最接近是让用户授权一个文件/位置
+    //   - showOpenFilePicker / showSaveFilePicker (Chrome 86+ / Edge 86+)
+    //   - Firefox / Safari 不支持
+    //   - file:// 协议不支持 (需要 HTTPS 或 localhost)
+    //   - handle 跨 session 持久化: 用 IndexedDB 存 (Chrome 102+ 才稳)
+    // 设计:
+    //   - 导入 handle: 启动时自动读文件 → 跟当前 state 对比 → 不一致就提示导入 (弹 confirm)
+    //   - 导出 handle: syncEnabled=true 时启动 setInterval → 每 N 秒读文件 + 对比 + 不一致就写
+    //   - 用户主动触发: 立即写文件 (sync-trigger-export-btn)
+    //   - 取消同步: 清掉 handle + 停定时器
+    //   - handle 不存 state (不能 JSON 序列化), 存 IndexedDB
+    let _syncImportHandle = null;   // FileSystemFileHandle, 启动时自动读
+    let _syncExportHandle = null;   // FileSystemFileHandle, 自动写目标
+    let _syncTimerId = null;        // setInterval id
+    let _syncImportFileName = '';   // UI 显示
+    let _syncExportFileName = '';   // UI 显示
+    // IndexedDB store for handles
+    const IDB_NAME = 'count_calendar_sync';
+    const IDB_STORE = 'handles';
+    function openIDB() {
+      return new Promise((resolve, reject) => {
+        const req = indexedDB.open(IDB_NAME, 1);
+        req.onupgradeneeded = () => {
+          const db = req.result;
+          if (!db.objectStoreNames.contains(IDB_STORE)) {
+            db.createObjectStore(IDB_STORE);
+          }
+        };
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+    async function idbSave(key, value) {
+      try {
+        const db = await openIDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(IDB_STORE, 'readwrite');
+          tx.objectStore(IDB_STORE).put(value, key);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
+      } catch (e) { console.warn('idbSave failed:', e); }
+    }
+    async function idbLoad(key) {
+      try {
+        const db = await openIDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(IDB_STORE, 'readonly');
+          const req = tx.objectStore(IDB_STORE).get(key);
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+      } catch (e) { console.warn('idbLoad failed:', e); return null; }
+    }
+    async function idbDelete(key) {
+      try {
+        const db = await openIDB();
+        return new Promise((resolve, reject) => {
+          const tx = db.transaction(IDB_STORE, 'readwrite');
+          tx.objectStore(IDB_STORE).delete(key);
+          tx.oncomplete = () => resolve();
+          tx.onerror = () => reject(tx.error);
+        });
+      } catch (e) { console.warn('idbDelete failed:', e); }
+    }
+    // File System Access API 兼容性
+    function isFileSystemAccessSupported() {
+      return typeof window.showOpenFilePicker === 'function' &&
+             typeof window.showSaveFilePicker === 'function' &&
+             window.isSecureContext;
+    }
+    // 读文件 + 解析 JSON, 返回 { ok, data, error }
+    async function readFileAsJson(handle) {
+      try {
+        const perm = await handle.queryPermission({ mode: 'read' });
+        if (perm !== 'granted') {
+          const req = await handle.requestPermission({ mode: 'read' });
+          if (req !== 'granted') return { ok: false, error: '用户拒绝读取权限' };
+        }
+        const file = await handle.getFile();
+        const text = await file.text();
+        let parsed;
+        try { parsed = JSON.parse(text); }
+        catch (err) { return { ok: false, error: '文件不是合法 JSON' }; }
+        return { ok: true, data: parsed };
+      } catch (e) {
+        return { ok: false, error: '读取文件失败: ' + (e.message || e.name) };
+      }
+    }
+    // 写文件 (用 createWritable, 不需要预先 queryPermission 因为 createSyncAccessHandle/getFile 都行)
+    async function writeJsonToHandle(handle, data) {
+      try {
+        const perm = await handle.queryPermission({ mode: 'readwrite' });
+        if (perm !== 'granted') {
+          const req = await handle.requestPermission({ mode: 'readwrite' });
+          if (req !== 'granted') return { ok: false, error: '用户拒绝写入权限' };
+        }
+        const writable = await handle.createWritable();
+        const json = JSON.stringify(data, null, 2);
+        await writable.write(json);
+        await writable.close();
+        return { ok: true, json };
+      } catch (e) {
+        return { ok: false, error: '写入文件失败: ' + (e.message || e.name) };
+      }
+    }
+    // 跟 exportData 一样的 payload 结构
+    function buildExportPayload() {
+      return {
+        schemaVersion: SCHEMA_VERSION,
+        appVersion: APP_VERSION,
+        exportedAt: new Date().toISOString(),
+        ...JSON.parse(JSON.stringify(state))
+      };
+    }
+    // 比对 state 跟文件内容 (用 JSON 字符串比较, 简单但够用)
+    function statesEqualByJson(a, b) {
+      return JSON.stringify(a) === JSON.stringify(b);
+    }
+    // 启动时从 IndexedDB 读 handle, 检查权限, 触发自动导入
+    async function tryRestoreSyncHandles() {
+      if (!isFileSystemAccessSupported()) return;
+      const importHandle = await idbLoad('import');
+      if (importHandle) {
+        const perm = await importHandle.queryPermission({ mode: 'read' });
+        if (perm === 'granted') {
+          _syncImportHandle = importHandle;
+          _syncImportFileName = importHandle.name || '(已授权文件)';
+        } else {
+          // 尝试请求权限
+          try {
+            const req = await importHandle.requestPermission({ mode: 'read' });
+            if (req === 'granted') {
+              _syncImportHandle = importHandle;
+              _syncImportFileName = importHandle.name || '(已授权文件)';
+            } else {
+              // 用户拒绝, 清掉 handle
+              await idbDelete('import');
+            }
+          } catch (e) { await idbDelete('import'); }
+        }
+      }
+      const exportHandle = await idbLoad('export');
+      if (exportHandle) {
+        const perm = await exportHandle.queryPermission({ mode: 'readwrite' });
+        if (perm === 'granted') {
+          _syncExportHandle = exportHandle;
+          _syncExportFileName = exportHandle.name || '(已授权文件)';
+        } else {
+          try {
+            const req = await exportHandle.requestPermission({ mode: 'readwrite' });
+            if (req === 'granted') {
+              _syncExportHandle = exportHandle;
+              _syncExportFileName = exportHandle.name || '(已授权文件)';
+            } else {
+              await idbDelete('export');
+            }
+          } catch (e) { await idbDelete('export'); }
+        }
+      }
+      updateSyncStatusUI();
+      // 启动时自动导入: 读文件 → 对比 → 不一致就弹 confirm
+      if (_syncImportHandle) {
+        await autoImportOnStartup();
+      }
+      // 启动时自动启动定时器 (如果 syncEnabled)
+      if (state.syncEnabled && _syncExportHandle) {
+        startAutoExport();
+      }
+    }
+    // 启动时自动导入逻辑
+    async function autoImportOnStartup() {
+      if (!_syncImportHandle) return;
+      const result = await readFileAsJson(_syncImportHandle);
+      if (!result.ok) { showToast('自动导入失败: ' + result.error, 'warn'); return; }
+      const valid = validateImportData(result.data);
+      if (!valid.ok) { showToast('导入文件不合法: ' + valid.error, 'warn'); return; }
+      const fileJson = JSON.stringify(valid.data);
+      const stateJson = JSON.stringify(buildExportPayload());
+      if (fileJson === stateJson) {
+        showToast('本地备份与当前数据一致, 无需导入');
+        return;
+      }
+      // 不一致 → 弹 confirm
+      const data = valid.data;
+      const projCount = data.projects.length;
+      const logCount = data.logs ? Object.keys(data.logs).reduce((sum, k) => sum + Object.keys(data.logs[k]).length, 0) : 0;
+      const ok = confirm(
+        `检测到本地备份与当前数据不一致, 是否导入?\n\n` +
+        `待导入内容:\n` +
+        `  · ${projCount} 个项目\n` +
+        `  · ${logCount} 条日志\n` +
+        `  · schemaVersion ${data.schemaVersion} (${data.appVersion || '未知版本'})\n\n` +
+        `导入会覆盖当前所有数据。`
+      );
+      if (!ok) return;
+      applyImportedData(data);
+      showToast(`已从本地备份导入 ${projCount} 项目, ${logCount} 日志`);
+    }
+    // 复用 handleImportFile 的 apply 逻辑
+    function applyImportedData(data) {
+      state = {
+        schemaVersion: SCHEMA_VERSION,
+        appVersion: APP_VERSION,
+        ...JSON.parse(JSON.stringify(data))
+      };
+      saveState();
+      renderAll();
+    }
+    // 启动自动导出定时器
+    function startAutoExport() {
+      stopAutoExport();
+      if (!_syncExportHandle || !state.syncEnabled) return;
+      const seconds = Math.max(1, Math.min(300, state.syncInterval || 5));
+      _syncTimerId = setInterval(autoExportTick, seconds * 1000);
+    }
+    function stopAutoExport() {
+      if (_syncTimerId) { clearInterval(_syncTimerId); _syncTimerId = null; }
+    }
+    // 定时器 callback: 读文件 → 对比 → 不一致就写
+    async function autoExportTick() {
+      if (!_syncExportHandle || !state.syncEnabled) {
+        stopAutoExport();
+        return;
+      }
+      // 读文件
+      const readRes = await readFileAsJson(_syncExportHandle);
+      if (!readRes.ok) {
+        // 文件可能不存在/被删 → 停止定时器, 提示用户重新选
+        stopAutoExport();
+        showToast('自动导出已停止: ' + readRes.error, 'warn');
+        return;
+      }
+      const fileJson = JSON.stringify(readRes.data);
+      const currentJson = JSON.stringify(buildExportPayload());
+      if (fileJson === currentJson) return;  // 一致, 不写
+      // 不一致 → 写
+      const writeRes = await writeJsonToHandle(_syncExportHandle, JSON.parse(currentJson));
+      if (!writeRes.ok) {
+        stopAutoExport();
+        showToast('自动导出失败: ' + writeRes.error, 'warn');
+      }
+    }
+    // 同步状态 UI 更新
+    function updateSyncStatusUI() {
+      const importNameEl = document.getElementById('sync-import-name');
+      const exportNameEl = document.getElementById('sync-export-name');
+      const statusEl = document.getElementById('sync-status');
+      const intervalDisplay = document.getElementById('sync-interval-display');
+      if (importNameEl) {
+        importNameEl.textContent = _syncImportFileName || '(未选)';
+        importNameEl.classList.toggle('configured', !!_syncImportFileName);
+      }
+      if (exportNameEl) {
+        exportNameEl.textContent = _syncExportFileName || '(未选)';
+        exportNameEl.classList.toggle('configured', !!_syncExportFileName);
+      }
+      if (intervalDisplay) intervalDisplay.textContent = state.syncInterval || 5;
+      if (statusEl) {
+        if (!isFileSystemAccessSupported()) {
+          statusEl.textContent = '⚠ 浏览器不支持 File System Access API (需 Chrome/Edge 86+ + HTTPS)';
+          statusEl.style.color = 'var(--warn, #d97706)';
+        } else if (_syncImportHandle || _syncExportHandle) {
+          const parts = [];
+          if (_syncImportHandle) parts.push('启动时自动导入 ✓');
+          if (_syncExportHandle) parts.push(state.syncEnabled ? `每 ${state.syncInterval}s 自动导出 ✓` : '自动导出未开启');
+          statusEl.textContent = parts.join(' | ');
+          statusEl.style.color = '';
+        } else {
+          statusEl.textContent = '未配置同步';
+          statusEl.style.color = '';
+        }
+      }
+    }
+    // 选导入文件
+    async function pickSyncImportFile() {
+      if (!isFileSystemAccessSupported()) {
+        showToast('浏览器不支持 File System Access API', 'warn');
+        return;
+      }
+      try {
+        const [handle] = await window.showOpenFilePicker({
+          types: [{ description: 'JSON 文件', accept: { 'application/json': ['.json'] } }],
+          multiple: false,
+          excludeAcceptAllOption: false
+        });
+        _syncImportHandle = handle;
+        _syncImportFileName = handle.name;
+        await idbSave('import', handle);
+        updateSyncStatusUI();
+        showToast(`已选导入文件: ${handle.name}`);
+      } catch (e) {
+        if (e.name !== 'AbortError') showToast('选文件失败: ' + (e.message || e.name), 'warn');
+      }
+    }
+    // 选导出文件
+    async function pickSyncExportFile() {
+      if (!isFileSystemAccessSupported()) {
+        showToast('浏览器不支持 File System Access API', 'warn');
+        return;
+      }
+      try {
+        const today = new Date();
+        const yyyy = today.getFullYear();
+        const mm = String(today.getMonth() + 1).padStart(2, '0');
+        const dd = String(today.getDate()).padStart(2, '0');
+        const handle = await window.showSaveFilePicker({
+          suggestedName: `count-calendar-backup-${yyyy}${mm}${dd}.json`,
+          types: [{ description: 'JSON 文件', accept: { 'application/json': ['.json'] } }]
+        });
+        _syncExportHandle = handle;
+        _syncExportFileName = handle.name;
+        await idbSave('export', handle);
+        updateSyncStatusUI();
+        showToast(`已选导出位置: ${handle.name}`);
+        // 如果 syncEnabled=true, 启动定时器
+        if (state.syncEnabled) startAutoExport();
+      } catch (e) {
+        if (e.name !== 'AbortError') showToast('选位置失败: ' + (e.message || e.name), 'warn');
+      }
+    }
+    // 立即触发导出
+    async function triggerSyncExport() {
+      if (!_syncExportHandle) { showToast('请先选导出位置', 'warn'); return; }
+      const payload = buildExportPayload();
+      const res = await writeJsonToHandle(_syncExportHandle, payload);
+      if (res.ok) showToast(`已写入 ${_syncExportFileName}`);
+      else showToast('写入失败: ' + res.error, 'warn');
+    }
+    // 取消同步
+    async function clearSync() {
+      stopAutoExport();
+      _syncImportHandle = null;
+      _syncExportHandle = null;
+      _syncImportFileName = '';
+      _syncExportFileName = '';
+      await idbDelete('import');
+      await idbDelete('export');
+      state.syncEnabled = false;
+      saveState();
+      updateSyncStatusUI();
+      // 同步 checkbox 状态
+      const enabledInput = document.getElementById('sync-enabled-input');
+      if (enabledInput) enabledInput.checked = false;
+      showToast('已取消所有同步配置');
+    }
     function showToast(msg, type) {
       const el = document.getElementById('toast');
       if (!el) return;
@@ -2468,6 +2908,57 @@
           closeSettingsMenu();
         });
       }
+      // v0.3.15：本地同步 (File System Access API) ——
+      //   同步按钮 → 打开设置菜单并滚动到同步 section
+      //   同步 section 里的 input/button 处理:
+      //     - 选择文件/位置 → showOpenFilePicker/showSaveFilePicker
+      //     - 自动导出 checkbox → toggle state.syncEnabled + 启停定时器
+      //     - 导出间隔 → 更新 state.syncInterval + 重启定时器
+      //     - 立即导出 → writeJsonToHandle
+      //     - 取消同步 → clearSync
+      const syncBtn = document.getElementById('sync-btn');
+      if (syncBtn) {
+        syncBtn.addEventListener('click', () => {
+          settingsMenu.classList.remove('hidden');
+          // 滚到同步 section
+          const sec = document.getElementById('sync-section');
+          if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          updateSyncStatusUI();
+        });
+      }
+      const syncImportBtn = document.getElementById('sync-import-btn');
+      if (syncImportBtn) syncImportBtn.addEventListener('click', pickSyncImportFile);
+      const syncExportBtn = document.getElementById('sync-export-btn');
+      if (syncExportBtn) syncExportBtn.addEventListener('click', pickSyncExportFile);
+      const syncEnabledInput = document.getElementById('sync-enabled-input');
+      if (syncEnabledInput) {
+        syncEnabledInput.checked = !!state.syncEnabled;
+        syncEnabledInput.addEventListener('change', () => {
+          state.syncEnabled = syncEnabledInput.checked;
+          saveState();
+          if (state.syncEnabled) startAutoExport();
+          else stopAutoExport();
+          updateSyncStatusUI();
+        });
+      }
+      const syncIntervalInput = document.getElementById('sync-interval-input');
+      if (syncIntervalInput) {
+        syncIntervalInput.value = state.syncInterval || 5;
+        syncIntervalInput.addEventListener('change', () => {
+          let v = parseInt(syncIntervalInput.value, 10);
+          if (isNaN(v) || v < 1) v = 1;
+          if (v > 300) v = 300;
+          syncIntervalInput.value = v;
+          state.syncInterval = v;
+          saveState();
+          if (state.syncEnabled) startAutoExport();  // 重启定时器
+          updateSyncStatusUI();
+        });
+      }
+      const syncTriggerBtn = document.getElementById('sync-trigger-export-btn');
+      if (syncTriggerBtn) syncTriggerBtn.addEventListener('click', triggerSyncExport);
+      const syncClearBtn = document.getElementById('sync-clear-btn');
+      if (syncClearBtn) syncClearBtn.addEventListener('click', clearSync);
       calWidthInput.addEventListener('input', () => {
         // v0.3.4+：拖动滑条 → 更新 state.calPanelWidth，重新算 UI 宽度 + cellSize
         const v = parseInt(calWidthInput.value, 10);
@@ -2509,8 +3000,11 @@
           `确定清除？`
         );
         if (!ok) return;
+        // v0.3.15：清数据时也停掉本地同步 (handle + 定时器), 跟首次启动一致
+        clearSync();
         // 保留视图设置,其他全清
         // v0.3.14：hideDownloadButton 也算 UI 偏好 (跟 fullscreen 一样, 是用户对界面显隐的选择, 不是数据)
+        // v0.3.15：syncEnabled / syncInterval 也算 UI 偏好 (用户对自动备份频率的选择), 保留
         const viewSettings = {
           fullscreen: state.fullscreen,
           maxCellSize: state.maxCellSize,
@@ -2519,7 +3013,9 @@
           viewMode: state.viewMode,
           viewYear: state.viewYear,
           viewMonth: state.viewMonth,
-          hideDownloadButton: state.hideDownloadButton
+          hideDownloadButton: state.hideDownloadButton,
+          syncEnabled: state.syncEnabled,
+          syncInterval: state.syncInterval
         };
         // 复制默认项目 (避免引用同一份对象,后续修改不会影响常量)
         const defaultProjects = JSON.parse(JSON.stringify(DEFAULT_PROJECTS));
@@ -2630,6 +3126,9 @@
         introCheckbox.checked = false;
         introModal.classList.remove('hidden');
       }
+      // v0.3.15：本地同步 —— 从 IndexedDB 恢复 handle, 启动时自动导入 + 定时器
+      //   异步执行,不阻塞 init 流程 (UI 已经渲染好)
+      tryRestoreSyncHandles();
     }
 
     // v0.3.11：下载当前 HTML 到本地 —— PWA 不可用时的降级方案

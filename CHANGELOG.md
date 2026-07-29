@@ -1,5 +1,78 @@
 # Changelog
 
+## v0.3.15 — 2026-07-29
+
+**本地同步 (File System Access API) —— 选本地 JSON 文件做自动备份**
+
+### 1. 背景与硬性技术限制
+
+**浏览器 JS 不能直接写文件到指定磁盘路径**（安全沙箱）。能做到的最接近是 **File System Access API** (`showOpenFilePicker` / `showSaveFilePicker`)：
+
+- **支持**：Chrome 86+ / Edge 86+ / Opera 72+
+- **不支持**：Firefox / Safari / 任何 `file://` 协议（需要 HTTPS 或 localhost）
+- **跨 session 持久化**：FileSystemFileHandle 可存 IndexedDB（Chrome 102+ 起稳定）
+- **picker 必须用户主动选**：不能预设路径，每次启动若 handle 失效需用户重新授权
+
+### 2. 顶部按钮
+
+- 顺序：`✎ ? ↓ ⇄ ⚙`（同步按钮 `⇄` 在设置按钮 `⚙` 左边）
+- 作用：点击 → 打开设置菜单 + 滚动到"本地同步"section
+- tooltip 详细说明 API 限制
+
+### 3. 设置菜单的"⇄ 本地同步" section
+
+- **导入文件**：点"选择文件..." → showOpenFilePicker 选 JSON → 拿 handle 存 IndexedDB
+  - 启动时自动读入 → 跟当前 state 对比 → 不一致弹 confirm 让用户选择是否导入
+  - 一致则 toast「本地备份与当前数据一致,无需导入」
+- **导出位置**：点"选择位置..." → showSaveFilePicker 选位置 → 拿 handle
+  - 开启"自动导出"后，每 N 秒对比当前数据跟文件内容
+  - 不一致就 writeJsonToHandle 写回文件
+  - 立即导出按钮：不等定时器直接写一次
+- **自动导出 checkbox**：开启 / 关闭 setInterval
+- **导出间隔 (秒)**：1-300，默认 5
+- **取消同步**：清掉 import + export handle + 停定时器 + 状态文字
+
+### 4. handle 持久化（IndexedDB）
+
+- 数据库名：`count_calendar_sync`，object store：`handles`
+- key `import` 存导入 handle，key `export` 存导出 handle
+- FileSystemFileHandle 是 structured-cloneable，可直接 put 到 IndexedDB
+- 启动时 init 末尾调 `tryRestoreSyncHandles()`：
+  - 从 IDB 读 handle → queryPermission → granted 则恢复
+  - 未 granted → requestPermission 再次请求（用户拒绝则清掉）
+  - 都恢复后自动跑 `autoImportOnStartup()` + 按需启动 setInterval
+
+### 5. 错误处理
+
+| 场景 | 处理 |
+|------|------|
+| API 不支持（Firefox / Safari / file://）| statusEl 黄色提示，picker 按钮点了弹 warn toast |
+| 用户取消 picker | 静默（AbortError 静默）|
+| 权限丢失（用户撤销/handle 失效）| autoExportTick 检测到读失败 → stopAutoExport + warn toast |
+| 文件被删 / 读取失败 | 同上 |
+| JSON 解析失败 | warn toast「文件不是合法 JSON」|
+| schemaVersion 更高 | 复用 `validateImportData` 校验 |
+| 写入失败 | warn toast「写入文件失败: ...」,停定时器 |
+
+### 6. 清除数据时
+
+- 调 `clearSync()` 停掉定时器 + 清 IDB handles
+- 但 `state.syncEnabled` 和 `state.syncInterval` 算 UI 偏好，保留
+- 跟 fullscreen / hideDownloadButton 一样的策略
+
+### 7. 欢迎页加 "⇄ 本地同步" section
+
+- 简短说明：选 JSON 文件 + 启动时自动导入 + 开启自动导出后每 N 秒对比
+- 注明 Chrome/Edge 86+ + HTTPS 限制
+
+### 8. 状态字段 + migration
+
+- 新增 `state.syncEnabled: false` 默认值
+- 新增 `state.syncInterval: 5` 默认值
+- migration: `typeof !== 'boolean'` / `typeof !== 'number'` 补默认
+
+### 9. APP_VERSION 0.3.14 → 0.3.15
+
 ## v0.3.14 — 2026-07-29
 
 **欢迎页加高亮提示（数据本地保存 + 导出提醒） + 新增「关闭下载按钮」全局设置**
