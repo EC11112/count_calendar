@@ -799,13 +799,14 @@
       <h2>项目</h2>
       <ul class="project-list" id="project-list"></ul>
       <!-- v0.3.11：左下三个按钮统一文本/图标格式,顺序: 新建 → 清除(仅编辑模式) → 编辑
-           - 新建项目: + 前缀,默认灰边框
-           - 清除数据: 🗑 前缀,仅项目编辑模式下显示,红色 (危险操作)
-           - 编辑项目: ✏ 前缀,默认蓝填充 (主操作); 切到编辑模式后变 "退出编辑" + 红填充 (危险退出) -->
+           - 新建项目: + 前缀,默认白底灰边框 (中性)
+           - 清除数据: 🗑 前缀,仅项目编辑模式下显示,红色 btn-danger (危险操作)
+           - 编辑项目: ✏ 前缀,默认白底灰边框 (中性); 切到编辑模式后变 "退出编辑" + 蓝色 btn-primary (当前正在编辑)
+           - 三色区分: 白色=中性默认, 蓝色=当前态/主操作, 红色=危险操作 -->
       <div class="sidebar-bottom">
         <button class="btn" id="add-project"><span class="btn-icon">+</span><span>新建项目</span></button>
         <button class="btn btn-danger" id="clear-data" style="display:none;"><span class="btn-icon">🗑</span><span>清除数据</span></button>
-        <button class="btn btn-primary" id="toggle-edit-projects"><span class="btn-icon">✏</span><span>编辑项目</span></button>
+        <button class="btn" id="toggle-edit-projects"><span class="btn-icon">✏</span><span>编辑项目</span></button>
       </div>
     </aside>
 
@@ -1432,20 +1433,24 @@
     // v0.3.9：sidebar 底部"编辑项目"/"退出编辑"按钮的状态切换
     // v0.3.9.1：读模块级 _projectEditMode (不再是 state.projectEditMode)
     // v0.3.11：清空数据按钮 + 图标用 <span class="btn-icon"> 包裹便于统一样式
-    //   - 正常态: 蓝填充 ✏ 编辑项目
-    //   - 编辑态: 红填充 "退出编辑" + 同步显示中间的 🗑 清除数据按钮
+    //   - 正常态: 白底灰边框 ✏ 编辑项目 (中性,跟 + 新建项目视觉一致)
+    //   - 编辑态: 蓝色填充 "退出编辑" (当前正在编辑 = 主操作状态,蓝色高亮)
+    //   - 同时显示中间的 🗑 清除数据按钮 (红色 btn-danger, 区分于蓝色的当前态)
+    //   - 三色分工: 白色=中性默认 / 蓝色=当前态 / 红色=危险操作
     function renderSidebarBottomButton() {
       const btn = document.getElementById('toggle-edit-projects');
       if (!btn) return;
       // 按钮内部用 icon + text 两个 span,只换文字部分
       const textSpan = btn.querySelector('.btn-text') || btn.querySelector('span:last-child') || btn;
       if (_projectEditMode) {
-        btn.classList.remove('btn-primary');
-        btn.classList.add('btn-danger');
-        textSpan.textContent = '退出编辑';
-      } else {
+        // 进入编辑模式: 蓝色填充 + 文字"退出编辑"
         btn.classList.remove('btn-danger');
         btn.classList.add('btn-primary');
+        textSpan.textContent = '退出编辑';
+      } else {
+        // 退出编辑模式: 恢复白底灰边框中性态 + 文字"编辑项目"
+        btn.classList.remove('btn-primary');
+        btn.classList.remove('btn-danger');
         textSpan.textContent = '编辑项目';
       }
       // 清除数据按钮：仅项目编辑模式显示（普通模式隐藏，不占位）
