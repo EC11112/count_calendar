@@ -1,5 +1,45 @@
 # Changelog
 
+## v0.3.14 — 2026-07-29
+
+**欢迎页加高亮提示（数据本地保存 + 导出提醒） + 新增「关闭下载按钮」全局设置**
+
+### 1. 欢迎页高亮提示 block
+
+- 位置：欢迎页 modal 顶部（`<h2>` 之后，第一个 section 之前）
+- 样式：`.intro-highlight` —— 蓝色左边框 + 淡蓝背景（rgb(37, 99, 235)），跟 toast.tip 同色系
+- 内容：「💾 数据保存在本地（localStorage），**切换浏览器或终端设备前记得导出**哦」
+- 强调「切换浏览器或终端设备前记得导出」用 `<b>` 标签蓝色高亮
+- 跟欢迎页其他 section 区分开（h4 标题 vs 蓝色 block），用户首次进入一眼能看到
+- 解决痛点：用户换浏览器/电脑/手机时数据不互通，localStorage 隔离导致数据丢失。导出 JSON 是唯一的迁移方式
+
+### 2. 新增全局设置「关闭下载按钮」
+
+- 位置：设置菜单 → 「全屏」下方，分隔线之前
+- 类型：checkbox
+- label：「关闭下载按钮」+ 提示 `?`（说明勾选后顶部 ↓ 隐藏，可在设置菜单随时改回来）
+- 行为：
+  - 勾选 → 顶部 stats-actions 4 个按钮变 3 个（`✎ ? ⚙`），下载按钮 ↓ display:none
+  - 取消勾选 → 立即恢复显示
+  - 切换时不调 renderAll（太重），只调 renderHeader 同步 install-btn.style.display
+  - 切换后自动 closeSettingsMenu
+- 适用场景：用户不需要下载/部署功能（不打算下载 HTML 离线版，也不打算装 PWA），想让顶部更简洁
+
+### 3. state 字段 + migration
+
+- 新增 `state.hideDownloadButton: false` 默认值
+- migration：`if (typeof state.hideDownloadButton !== 'boolean') state.hideDownloadButton = false`
+- 老用户升级到 v0.3.14 时自动补 false（默认显示下载按钮）
+
+### 4. 清除数据时的处理
+
+- `hideDownloadButton` 算 UI 偏好（跟 fullscreen 一样），不是数据
+- 加入 `viewSettings` 保留项，跟 maxCellSize / maxStripCols / viewMode 等一起
+- 清除数据时用户的"隐藏下载按钮"偏好保留
+- 欢迎页"清除数据"section 文案同步加"隐藏下载按钮"：`视图设置（全屏/格子大小/隐藏下载按钮）会保留`
+
+### 5. APP_VERSION 0.3.13 → 0.3.14
+
 ## v0.3.13 — 2026-07-29
 
 **修 bug：最大显示星期=7 + 方块大小上限=40 时，季/年视图塌缩到 1 个星期列**

@@ -787,6 +787,22 @@
       color: var(--text);
       font-weight: 500;
     }
+    /* v0.3.14：欢迎页高亮提示 block —— 蓝边蓝底，强调"数据本地保存" + "导出提醒"
+       放在 intro-body 顶部,首次进入时一眼能看到,避免用户换浏览器/设备后丢数据 */
+    .intro-highlight {
+      background: rgba(37, 99, 235, 0.08);
+      border-left: 3px solid rgb(37, 99, 235);
+      padding: 10px 12px;
+      border-radius: 4px;
+      margin-bottom: 14px;
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--text);
+    }
+    .intro-highlight b {
+      color: rgb(37, 99, 235);
+      font-weight: 600;
+    }
     .intro-footer {
       display: flex;
       align-items: center;
@@ -887,6 +903,14 @@
             </span>
             <input type="checkbox" id="fullscreen-input">
           </label>
+          <!-- v0.3.14：关闭下载按钮 (用户觉得顶部 4 个按钮太多, 可以隐藏 ↓) -->
+          <label class="settings-row">
+            <span>
+              关闭下载按钮
+              <span class="settings-inline-hint" title="隐藏顶部 ↓ 下载/部署按钮。如果你不需要这个功能（不打算下载 HTML 离线版,也不打算装为 PWA）,勾选后顶部更简洁。设置项本身不受影响,可在设置菜单里随时改回来。">?</span>
+            </span>
+            <input type="checkbox" id="hide-download-input">
+          </label>
           <!-- v0.3.4+：滑条调控日历面板 mainW，全屏开时灰色禁用
                min = 7 × 方块上限 × 1.1（一周大小 + 10% 余量）
                max = 视口 × 0.7
@@ -969,6 +993,10 @@
     <div class="modal-content intro-content">
       <h2>欢迎使用计数日历</h2>
       <div class="intro-body">
+        <!-- v0.3.14：数据本地保存 + 导出提醒 (高亮 block, 蓝色边突出) -->
+        <div class="intro-highlight">
+          💾 数据保存在本地（localStorage），<b>切换浏览器或终端设备前记得导出</b>哦
+        </div>
         <div class="intro-section">
           <h4>📅 记录</h4>
           <p>点击日期块循环记录:<b>工时类</b>(学习/工作) 是 无 → 半天 → 整天 → 无;<b>非工时类</b>(健身/阅读) 是 无 → √ → 无。同一天可记录多个项目,用色条区分。</p>
@@ -991,7 +1019,7 @@
         </div>
         <div class="intro-section">
           <h4>🗑 清除数据</h4>
-          <p>项目编辑模式下中间的 <b>🗑 清除数据</b> 按钮可完全恢复到首次启动状态:清空所有项目 + 日志 + 欢迎弹窗的"不再提醒"设置,恢复默认 3 个项目（学习/运动/工作）。视图设置（全屏/格子大小）会保留。建议清除前先导出备份。</p>
+          <p>项目编辑模式下中间的 <b>🗑 清除数据</b> 按钮可完全恢复到首次启动状态:清空所有项目 + 日志 + 欢迎弹窗的"不再提醒"设置,恢复默认 3 个项目（学习/运动/工作）。视图设置（全屏/格子大小/隐藏下载按钮）会保留。建议清除前先导出备份。</p>
         </div>
         <div class="intro-section">
           <h4>⚙ 设置与数据</h4>
@@ -1016,7 +1044,7 @@
     //   - appVersion: 跟着代码走 (const),导出时写入,用来跟用户沟通时定位版本
     //   - schemaVersion: 数据结构版本,导入时校验,未来加字段时升 v2 并写 migration
     // 关系: 一次代码部署对应一个 APP_VERSION;同一个 APP_VERSION 下 schema 多次升级也是可能的
-    const APP_VERSION = '0.3.13';
+    const APP_VERSION = '0.3.14';
     const SCHEMA_VERSION = 1;
     const HOURS_PER_DAY = 8;
     const COLORS = [
@@ -1140,7 +1168,10 @@
       //   刷新/切换 active 自动退出,不该持久化. 改为模块级 let _projectEditMode
       // v0.3.11：编辑模式 editMode 同样改为临时 UI 状态 —— 刷新自动关闭,跟 _projectEditMode 一致的策略
       // v0.3.11：欢迎页 dismissedIntro (默认 false = 显示,用户勾选"不再提醒"+点"知道了"后改 true 不再显示)
-      dismissedIntro: false
+      dismissedIntro: false,
+      // v0.3.14：隐藏下载按钮 (默认 false = 显示,勾选后隐藏顶部的 ↓ 下载/部署按钮)
+      //   适用场景: 用户不需要这个功能 (如工作电脑统一管理应用部署), 关掉让顶部更简洁
+      hideDownloadButton: false
     };
 
     // v0.3.0-v0.3.3 旧版屏占比档位（仅 migration 用，把旧值映射到新全屏开关）
@@ -1225,6 +1256,8 @@
       delete state.editMode;
       // v0.3.11：欢迎页 dismissedIntro 默认 false (显示) —— 老数据没这个字段,补上
       if (typeof state.dismissedIntro !== 'boolean') state.dismissedIntro = false;
+      // v0.3.14：隐藏下载按钮 hideDownloadButton 默认 false (显示) —— 老数据没这个字段,补上
+      if (typeof state.hideDownloadButton !== 'boolean') state.hideDownloadButton = false;
       saveState();
     }
     function saveState() {
@@ -1549,6 +1582,10 @@
         label = `${state.viewYear} 年`;
       }
       document.getElementById('month-label').textContent = label;
+
+      // v0.3.14：下载/部署按钮显隐 (受 state.hideDownloadButton 控制)
+      const installBtn = document.getElementById('install-btn');
+      if (installBtn) installBtn.style.display = state.hideDownloadButton ? 'none' : '';
 
       // v0.3.4+：月/季/年统一 .cal-view，不再按 viewMode 切换显隐
     }
@@ -2356,11 +2393,14 @@
       const maxCellInput = document.getElementById('max-cell-input');
       const fullscreenInput = document.getElementById('fullscreen-input');
       const calWidthInput = document.getElementById('cal-width-input');
+      const hideDownloadInput = document.getElementById('hide-download-input');
       // 星期数 input：用户输入 1-7 整数，state 存对应的 7 的倍数（1=7, 5=35, 7=49）
       maxColsInput.value = state.maxStripCols / 7;
       maxCellInput.value = state.maxCellSize;
       // 全屏 checkbox
       fullscreenInput.checked = !!state.fullscreen;
+      // v0.3.14：关闭下载按钮 checkbox 同步 state
+      if (hideDownloadInput) hideDownloadInput.checked = !!state.hideDownloadButton;
       // v0.3.4+：滑条 sync 助手 —— 任何 state 变了都调一下同步 min/max/value/disabled
       // （syncCalWidthSlider 已经在 applyScreenRatio 之后定义成顶层函数）
       syncCalWidthSlider();
@@ -2418,6 +2458,16 @@
         syncCalWidthSlider();
         renderCalendar();
       });
+      // v0.3.14：关闭下载按钮 —— toggle state.hideDownloadButton + 立即更新 install-btn 显隐
+      //   不用 renderAll (太重), 只调 renderHeader 同步 install-btn 就行
+      if (hideDownloadInput) {
+        hideDownloadInput.addEventListener('change', () => {
+          state.hideDownloadButton = hideDownloadInput.checked;
+          saveState();
+          renderHeader();
+          closeSettingsMenu();
+        });
+      }
       calWidthInput.addEventListener('input', () => {
         // v0.3.4+：拖动滑条 → 更新 state.calPanelWidth，重新算 UI 宽度 + cellSize
         const v = parseInt(calWidthInput.value, 10);
@@ -2460,6 +2510,7 @@
         );
         if (!ok) return;
         // 保留视图设置,其他全清
+        // v0.3.14：hideDownloadButton 也算 UI 偏好 (跟 fullscreen 一样, 是用户对界面显隐的选择, 不是数据)
         const viewSettings = {
           fullscreen: state.fullscreen,
           maxCellSize: state.maxCellSize,
@@ -2467,7 +2518,8 @@
           calPanelWidth: state.calPanelWidth,
           viewMode: state.viewMode,
           viewYear: state.viewYear,
-          viewMonth: state.viewMonth
+          viewMonth: state.viewMonth,
+          hideDownloadButton: state.hideDownloadButton
         };
         // 复制默认项目 (避免引用同一份对象,后续修改不会影响常量)
         const defaultProjects = JSON.parse(JSON.stringify(DEFAULT_PROJECTS));
