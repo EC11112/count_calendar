@@ -1082,7 +1082,7 @@
       fullscreen: true,
       // v0.3.4+：日历面板 mainW 滑条值（null = 自动用 cellUiW 公式）
       // 范围 7*maxCellSize*1.1 ~ appW*0.7，step 10
-      calPanelWidth: null
+      calPanelWidth: null,
       // v0.3.9.x：项目编辑模式 projectEditMode 不放在 state 里 —— 它是临时 UI 状态,
       //   刷新/切换 active 自动退出,不该持久化. 改为模块级 let _projectEditMode
       // v0.3.11：编辑模式 editMode 同样改为临时 UI 状态 —— 刷新自动关闭,跟 _projectEditMode 一致的策略
