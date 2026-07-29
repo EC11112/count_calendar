@@ -1,5 +1,60 @@
 # Changelog
 
+## v0.3.11 — 2026-07-29
+
+**临时态收尾（编辑模式跟项目编辑模式一致）+ 温馨提示 + 欢迎页 + 清除数据 + 按钮统一**
+
+### 1. 编辑模式（✏）也改为临时 UI 状态
+
+- 跟 v0.3.9.1 的 `_projectEditMode` 一致，`state.editMode` 改模块级 `let _editMode = false`
+- 不入 localStorage，刷新自动关闭（防上次忘了关 + 误记录）
+- Migration：`delete state.editMode` 清掉老数据里的残留字段
+- 所有读 `state.editMode` 的地方（renderHeader、buildCalCell click 判定、edit-toggle handler）都改成读 `_editMode`
+- edit-toggle handler 不再调 `saveState()`
+
+### 2. 非编辑态双击日期块 → 温馨提示
+
+- 之前：非编辑态下点击日期块完全无反应（防止误触）
+- 现在：在非编辑态下，**双击**任意日期块 → 顶部弹蓝色 toast「温馨提示: 当前为只读模式,点击右上角 ✏ 进入编辑后再记录人天」
+- 单击仍然静默无反应（防误触原则保留）
+- 新增 `.toast.tip` CSS（蓝色背景），`showToast()` 加 `'tip'` 类型支持
+- 编辑态下双击不触发温馨提示（保持原有单击 cycle 行为）
+
+### 3. 进入网页默认简介（欢迎页 modal）
+
+- 首次进入页面 → 自动弹欢迎页 modal，介绍所有功能
+- 7 个分区：记录 / 视图与统计 / 项目管理 / 编辑模式 / 项目编辑 / 清除数据 / 设置与数据
+- 底部"知道了"按钮关闭弹窗
+- 底部"不再提醒" checkbox + 点"知道了" → `state.dismissedIntro = true` 持久化，以后刷新不再弹
+- 只点"知道了"不勾选 → 下次刷新还会再弹
+- 点 modal 背景（非内容区）也能关闭，但**不持久化** dismissedIntro（避免误触）
+- 状态字段：`state.dismissedIntro: false` 默认；老数据 migration 补字段
+
+### 4. 项目编辑模式下加"清除数据"按钮
+
+- 位置：sidebar 底部三按钮中间（新建项目 / **🗑 清除数据** / 编辑项目）
+- 仅在 `_projectEditMode = true` 时显示（普通模式隐藏，不占位）
+- 红色 `.btn-danger` 样式（区别于"退出编辑"也是红色但位置不同）
+- 点击 → 弹系统 confirm，显示"将删除 N 条日志记录（项目定义保留）" + "建议先导出备份"
+- 确认后：`state.logs = {}` + saveState + renderCalendar + renderStats + 黑色 toast「已清除 N 条日志」
+- **保留项目定义**，只清空所有日志（比"清空 localStorage 全部"温和，能保留项目配置）
+
+### 5. 项目编辑按钮（侧边栏底部）改为蓝色
+
+- 之前：默认态是灰边框 dashed `.btn`，切到编辑模式变红 `.btn-danger`
+- 现在：默认态是蓝色实色 `.btn-primary`（主操作），切到编辑模式变红 `.btn-danger`（危险退出）
+- 蓝色（主操作）→ 红色（危险退出）的色阶区分，让用户一眼能看出当前是"进入"还是"退出"
+
+### 6. 侧边栏底部三按钮统一文本/图标格式
+
+- 之前：三个按钮（+ 新建 / 编辑项目 / 退出编辑）样式零散，dashed 边框 + 居中文本 + 文本无图标前缀
+- 现在：
+  - 统一用 `.sidebar-bottom` flex 纵向容器，间距 8px
+  - 三个按钮都用 solid 边框（替代 dashed）+ 左对齐 + 前缀图标
+  - 图标：`+`（新建）/ `🗑`（清除）/ `✏`（编辑）
+  - HTML 结构统一成 `<span class="btn-icon">前缀</span><span>文本</span>`，便于后续单独替换图标或文本
+- `renderSidebarBottomButton()` 重构：只换文本部分 + 切 `btn-primary` / `btn-danger` class
+
 ## v0.3.10 — 2026-07-29
 
 **数据导出/导入 (跨浏览器迁移 + 备份) + 数据结构优化**

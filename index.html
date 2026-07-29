@@ -175,6 +175,34 @@
     .project-list.edit-mode .project-item .edit,
     .project-list.edit-mode .project-item .del { visibility: visible; }
     .project-list.edit-mode .project-item .eye { display: none; }
+    /* v0.3.11：sidebar 底部三按钮统一容器 —— flex 纵向排列,按钮间 8px 间距
+       三个按钮（新建/清除/编辑）视觉一致：左对齐 + 前缀图标 + 文本 */
+    .sidebar-bottom {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      margin-top: 4px;
+    }
+    .sidebar-bottom .btn {
+      display: flex;
+      align-items: center;
+      justify-content: flex-start;
+      gap: 8px;
+      text-align: left;
+      font-size: 13px;
+      padding: 8px 12px;
+      /* 用 solid border 替代默认 dashed，跟编辑/清除按钮的实色边框对齐 */
+      border-style: solid;
+      border-width: 1px;
+    }
+    .sidebar-bottom .btn-icon {
+      font-size: 14px;
+      line-height: 1;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-width: 16px;
+    }
     /* v0.3.9：edit 按钮 —— 复用 eye/del 的样式,在编辑模式下显示 */
     .project-item .edit {
       visibility: hidden;
@@ -359,6 +387,10 @@
     }
     .toast.warn {
       background: rgba(220, 38, 38, 0.94);
+    }
+    /* v0.3.11：tip 类型 —— 蓝色,非阻塞友好提示 (非编辑态双击日期块) */
+    .toast.tip {
+      background: rgba(37, 99, 235, 0.94);
     }
     /* v0.3.3：设置菜单对齐统一
        - label flex: 1 1 auto，左对齐，撑满左侧
@@ -678,6 +710,64 @@
     .modal-actions { display: flex; gap: 8px; justify-content: flex-end; }
     .modal-actions button { width: auto; padding: 6px 14px; }
 
+    /* v0.3.11：欢迎页 modal —— 比项目 modal 宽,展示功能列表 */
+    .intro-content {
+      width: 460px;
+      max-width: 92vw;
+      max-height: 86vh;
+      display: flex;
+      flex-direction: column;
+      padding: 24px;
+    }
+    .intro-content h2 { margin: 0 0 16px; font-size: 18px; font-weight: 600; }
+    .intro-body {
+      flex: 1;
+      overflow-y: auto;
+      padding-right: 4px;
+    }
+    .intro-section {
+      margin-bottom: 14px;
+    }
+    .intro-section:last-child { margin-bottom: 0; }
+    .intro-section h4 {
+      margin: 0 0 4px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+    .intro-section p {
+      margin: 0;
+      font-size: 12px;
+      line-height: 1.55;
+      color: var(--text-soft);
+    }
+    .intro-section p b {
+      color: var(--text);
+      font-weight: 500;
+    }
+    .intro-footer {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-top: 18px;
+      padding-top: 14px;
+      border-top: 1px solid var(--border);
+    }
+    .intro-checkbox {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--text-soft);
+      cursor: pointer;
+      user-select: none;
+    }
+    .intro-checkbox input[type="checkbox"] {
+      cursor: pointer;
+      accent-color: var(--accent);
+    }
+    .intro-footer .btn { width: auto; padding: 6px 18px; }
+
     /* ===== Responsive ===== */
     /* v0.3.3：窄屏（手机/小平板竖屏）3 panel 改上下堆叠，避免横屏 3 列挤压到日历看不清
        兼容当前 .ui-wrap 结构 —— grid-template-columns 改 1fr，3 panel 自然竖排
@@ -708,9 +798,15 @@
     <aside class="panel sidebar">
       <h2>项目</h2>
       <ul class="project-list" id="project-list"></ul>
-      <button class="btn" id="add-project">+ 新建项目</button>
-      <!-- v0.3.9：项目编辑模式切换 (在 normal 是"编辑项目" / 灰边框,在 edit mode 是"退出编辑" / 红色) -->
-      <button class="btn" id="toggle-edit-projects" style="margin-top:8px;">编辑项目</button>
+      <!-- v0.3.11：左下三个按钮统一文本/图标格式,顺序: 新建 → 清除(仅编辑模式) → 编辑
+           - 新建项目: + 前缀,默认灰边框
+           - 清除数据: 🗑 前缀,仅项目编辑模式下显示,红色 (危险操作)
+           - 编辑项目: ✏ 前缀,默认蓝填充 (主操作); 切到编辑模式后变 "退出编辑" + 红填充 (危险退出) -->
+      <div class="sidebar-bottom">
+        <button class="btn" id="add-project"><span class="btn-icon">+</span><span>新建项目</span></button>
+        <button class="btn btn-danger" id="clear-data" style="display:none;"><span class="btn-icon">🗑</span><span>清除数据</span></button>
+        <button class="btn btn-primary" id="toggle-edit-projects"><span class="btn-icon">✏</span><span>编辑项目</span></button>
+      </div>
     </aside>
 
     <main class="panel">
@@ -782,7 +878,7 @@
 
     <section class="panel stats">
       <div class="stats-actions">
-        <button id="edit-toggle" class="header-icon-btn" title="编辑模式：关时点击日历不会修改记录，开时点击切换 0 → 半天 → 整天" aria-label="编辑模式">✏</button>
+        <button id="edit-toggle" class="header-icon-btn" title="编辑模式（刷新自动关闭）：关时点击日历不会修改记录，开时点击切换 0 → 半天 → 整天" aria-label="编辑模式">✏</button>
         <button id="settings-btn" class="header-icon-btn" title="设置" aria-label="设置">⚙</button>
       </div>
       <h2 id="stats-title">统计</h2>
@@ -821,6 +917,51 @@
        accept=".json" 限制只让选 JSON 文件;display:none 但仍在 DOM 里 -->
   <input type="file" id="import-file-input" accept=".json,application/json" style="display:none;">
 
+  <!-- v0.3.11：欢迎/功能简介 modal —— 首次进入页面时弹出 (除非用户之前勾选"不再提醒")
+       内容覆盖所有主要功能,让用户一眼知道这个 app 能干啥
+       "知道了" 按钮关闭弹窗;勾选"不再提醒" + 点"知道了"后写入 state.dismissedIntro=true,以后不再弹 -->
+  <div class="modal hidden" id="intro-modal">
+    <div class="modal-content intro-content">
+      <h2>欢迎使用计数日历</h2>
+      <div class="intro-body">
+        <div class="intro-section">
+          <h4>📅 记录</h4>
+          <p>点击日期块循环记录:<b>无 → 半天 → 整天 → 无</b>。同一天可记录多个项目,用色条区分。</p>
+        </div>
+        <div class="intro-section">
+          <h4>👁 视图与统计</h4>
+          <p>顶部切换 <b>月 / 季 / 年</b> 三种视图。右侧统计按项目汇总,工时类项目折合小时。</p>
+        </div>
+        <div class="intro-section">
+          <h4>🎯 项目管理</h4>
+          <p>侧边栏点击 👁 切换显隐。<b>工时类</b>(半天/整天) 日合计不超过 1 天;<b>非工时类</b>(健身/阅读) 只算天。</p>
+        </div>
+        <div class="intro-section">
+          <h4>✏️ 编辑模式</h4>
+          <p>默认<b>只读</b>防误触,点击右上角 ✏ 进入编辑。编辑模式仅本次会话有效,刷新自动关闭。</p>
+        </div>
+        <div class="intro-section">
+          <h4>🛠 项目编辑</h4>
+          <p>侧边栏底部 <b>✏ 编辑项目</b> 可改名/改色/改分类/删除。点击项目名可切换 active 项目(同时退出编辑模式)。</p>
+        </div>
+        <div class="intro-section">
+          <h4>🗑 清除数据</h4>
+          <p>项目编辑模式下中间的 <b>🗑 清除数据</b> 按钮可清空所有日志(项目定义保留),清除前建议先导出备份。</p>
+        </div>
+        <div class="intro-section">
+          <h4>⚙ 设置与数据</h4>
+          <p>右上 ⚙ 菜单可切换<b>全屏 / 调整日历宽度</b>,以及<b>导出 / 导入 JSON</b> 用于跨浏览器迁移和备份。</p>
+        </div>
+      </div>
+      <div class="intro-footer">
+        <label class="intro-checkbox">
+          <input type="checkbox" id="intro-no-remind"> 不再提醒
+        </label>
+        <button class="btn btn-primary" id="intro-confirm">知道了</button>
+      </div>
+    </div>
+  </div>
+
   <script>
     'use strict';
 
@@ -830,7 +971,7 @@
     //   - appVersion: 跟着代码走 (const),导出时写入,用来跟用户沟通时定位版本
     //   - schemaVersion: 数据结构版本,导入时校验,未来加字段时升 v2 并写 migration
     // 关系: 一次代码部署对应一个 APP_VERSION;同一个 APP_VERSION 下 schema 多次升级也是可能的
-    const APP_VERSION = '0.3.10';
+    const APP_VERSION = '0.3.11';
     const SCHEMA_VERSION = 1;
     const HOURS_PER_DAY = 8;
     const COLORS = [
@@ -944,6 +1085,9 @@
       calPanelWidth: null
       // v0.3.9.x：项目编辑模式 projectEditMode 不放在 state 里 —— 它是临时 UI 状态,
       //   刷新/切换 active 自动退出,不该持久化. 改为模块级 let _projectEditMode
+      // v0.3.11：编辑模式 editMode 同样改为临时 UI 状态 —— 刷新自动关闭,跟 _projectEditMode 一致的策略
+      // v0.3.11：欢迎页 dismissedIntro (默认 false = 显示,用户勾选"不再提醒"+点"知道了"后改 true 不再显示)
+      dismissedIntro: false
     };
 
     // v0.3.0-v0.3.3 旧版屏占比档位（仅 migration 用，把旧值映射到新全屏开关）
@@ -1022,8 +1166,12 @@
       if (typeof state.calPanelWidth !== 'number' || state.calPanelWidth < 100) {
         state.calPanelWidth = null;
       }
-      // v0.3.6：editMode 默认 false（只读），防止误触添加 log
-      if (typeof state.editMode !== 'boolean') state.editMode = false;
+      // v0.3.11：editMode 改为临时 UI 状态 (模块级 _editMode) —— 删掉老数据里的残留字段
+      //   之前的版本误把 _editMode 当成持久字段存了 localStorage,刷新后还保留打开态容易误记录
+      //   现在跟 _projectEditMode 一样,只在内存里活着,刷新自动关闭
+      delete state.editMode;
+      // v0.3.11：欢迎页 dismissedIntro 默认 false (显示) —— 老数据没这个字段,补上
+      if (typeof state.dismissedIntro !== 'boolean') state.dismissedIntro = false;
       saveState();
     }
     function saveState() {
@@ -1283,16 +1431,26 @@
     }
     // v0.3.9：sidebar 底部"编辑项目"/"退出编辑"按钮的状态切换
     // v0.3.9.1：读模块级 _projectEditMode (不再是 state.projectEditMode)
+    // v0.3.11：清空数据按钮 + 图标用 <span class="btn-icon"> 包裹便于统一样式
+    //   - 正常态: 蓝填充 ✏ 编辑项目
+    //   - 编辑态: 红填充 "退出编辑" + 同步显示中间的 🗑 清除数据按钮
     function renderSidebarBottomButton() {
       const btn = document.getElementById('toggle-edit-projects');
       if (!btn) return;
+      // 按钮内部用 icon + text 两个 span,只换文字部分
+      const textSpan = btn.querySelector('.btn-text') || btn.querySelector('span:last-child') || btn;
       if (_projectEditMode) {
-        btn.textContent = '退出编辑';
+        btn.classList.remove('btn-primary');
         btn.classList.add('btn-danger');
+        textSpan.textContent = '退出编辑';
       } else {
-        btn.textContent = '编辑项目';
         btn.classList.remove('btn-danger');
+        btn.classList.add('btn-primary');
+        textSpan.textContent = '编辑项目';
       }
+      // 清除数据按钮：仅项目编辑模式显示（普通模式隐藏，不占位）
+      const clearBtn = document.getElementById('clear-data');
+      if (clearBtn) clearBtn.style.display = _projectEditMode ? '' : 'none';
     }
     // v0.3.9：删除项目 (从 .del click handler 抽出来,删除逻辑独立)
     function deleteProject(id) {
@@ -1313,10 +1471,11 @@
         b.classList.toggle('active', b.dataset.view === state.viewMode);
       });
       // v0.3.6：编辑按钮 active 态 + cal-view readonly 模式 class
+      // v0.3.11：读模块级 _editMode (不再是 state.editMode,刷新后自动关闭)
       const editBtn = document.getElementById('edit-toggle');
-      if (editBtn) editBtn.classList.toggle('active', state.editMode);
+      if (editBtn) editBtn.classList.toggle('active', _editMode);
       const calView = document.getElementById('cal-view');
-      if (calView) calView.classList.toggle('readonly-mode', !state.editMode);
+      if (calView) calView.classList.toggle('readonly-mode', !_editMode);
 
       let label = '';
       if (state.viewMode === 'month') {
@@ -1489,8 +1648,9 @@
       // v0.3.7：按 active project 的 kind 决定 cycle —— 工时类 0→半→整→0 (mod 3),非工时类 0→√→0 (mod 2)
       // v0.3.8：工时类项目校验"日合计 <= 1.0 天" —— 你不可能一天给 3 个项目干 0.5 天
       //   半天 = 0.5, 整天 = 1.0; 若 next 应用后跨项目合计 > 1.0 则阻止并 toast
+      // v0.3.11：读 _editMode (模块级),刷新自动关闭编辑态,防止误记录
       const activeProj = getProject(state.currentProjectId);
-      if (state.editMode && activeProj && ds <= todayKey) {
+      if (_editMode && activeProj && ds <= todayKey) {
         cell.addEventListener('click', () => {
           const cur = getClicks(activeProj.id, ds);
           const modulo = (activeProj.kind === 'days') ? 2 : 3;
@@ -1511,6 +1671,14 @@
           setClicks(activeProj.id, ds, next);
           renderCalendar();
           renderStats();
+        });
+      } else if (!_editMode) {
+        // v0.3.11：非编辑态下双击日期块 → 顶部弹出"温馨提示"提示用户进入编辑模式
+        //   单独 click 静默无反应（防止误触），双击作为一个 discoverability 触点
+        //   dblclick 在 click 之后触发,所以两个 click handler 不会冲突（这里非编辑态根本没绑 click）
+        cell.addEventListener('dblclick', (e) => {
+          e.preventDefault();
+          showToast('温馨提示: 当前为只读模式,点击右上角 ✏ 进入编辑后再记录人天', 'tip');
         });
       }
       return cell;
@@ -1746,12 +1914,19 @@
     //   - 刷新页面 / 切换 active 项目都自动退出 (li click handler 里设回 false)
     //   - 不入 state,不入 localStorage (防止刷新后忘记自己开了 edit 模式误删)
     let _projectEditMode = false;
+    // v0.3.11：编辑模式 (右上角 ✏ 切换的) —— 跟 _projectEditMode 一样改为临时 UI 状态
+    //   - 刷新页面自动退出 (不入 localStorage,防止上次忘了关然后刷新后还开着,误记录)
+    //   - 不入 state,不入 localStorage
+    let _editMode = false;
     function showToast(msg, type) {
       const el = document.getElementById('toast');
       if (!el) return;
       el.textContent = msg;
-      el.classList.remove('warn');
+      el.classList.remove('warn', 'tip');
+      // v0.3.8：warn 类型 (红色) 用于工时校验失败等阻塞性提示
+      // v0.3.11：tip 类型 (蓝色) 用于非阻塞性的友好提示,如非编辑态双击的"温馨提示"
       if (type === 'warn') el.classList.add('warn');
+      else if (type === 'tip') el.classList.add('tip');
       // 强制重排,保证连续触发时 transition 重新跑
       el.classList.remove('show');
       // eslint-disable-next-line no-unused-expressions
@@ -2081,13 +2256,15 @@
       // v0.3.4+：导航按钮 title 同步当前视图（上一月/上一季/上一年）
       updateNavTitles();
       // v0.3.6：编辑模式开关 —— 切换 state.editMode，重渲染 cell（决定是否绑 click handler）
+      // v0.3.11：state.editMode → 模块级 _editMode,刷新自动关闭（防误记录）
+      // v0.3.11：改用模块级 _editMode,刷新自动关闭（防上次忘了关 + 误记录）
+      //   不调 saveState —— 临时 UI 状态不入 localStorage
       const editBtn = document.getElementById('edit-toggle');
       editBtn.addEventListener('click', (e) => {
         e.stopPropagation();
-        state.editMode = !state.editMode;
-        saveState();
+        _editMode = !_editMode;
         renderHeader();   // 更新按钮 active + cal-view readonly-mode class
-        renderCalendar(); // 重新构建 cell,根据 editMode 决定是否绑 click
+        renderCalendar(); // 重新构建 cell,根据 _editMode 决定是否绑 click
       });
       settingsBtn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -2147,6 +2324,28 @@
         _projectEditMode = !_projectEditMode;
         renderProjects();
       });
+      // v0.3.11：清除数据按钮 —— 弹 confirm 确认后清空 state.logs
+      //   保留项目定义,只清空所有日志记录 (跟"清空 localStorage 全部"不同,后者会把项目定义也带走)
+      //   建议先导出备份再清空,这样能复原
+      document.getElementById('clear-data').addEventListener('click', () => {
+        // 数一下当前有几条 log,confirm 信息更友好
+        const logCount = Object.values(state.logs || {}).reduce(
+          (sum, projLogs) => sum + Object.keys(projLogs).length, 0
+        );
+        const ok = confirm(
+          `确定要清除所有日志数据吗？\n\n` +
+          `项目定义会保留,但会删除：\n` +
+          `  · ${logCount} 条日志记录（所有项目、所有日期）\n\n` +
+          `此操作不可撤销,建议先在 ⚙ 里导出备份。\n\n` +
+          `确定清除？`
+        );
+        if (!ok) return;
+        state.logs = {};
+        saveState();
+        renderCalendar();
+        renderStats();
+        showToast(`已清除 ${logCount} 条日志`);
+      });
       document.getElementById('cancel-project').addEventListener('click', closeModal);
       document.getElementById('confirm-project').addEventListener('click', confirmProject);
       // v0.3.10：导出/导入数据
@@ -2175,6 +2374,32 @@
       document.getElementById('project-modal').addEventListener('click', (e) => {
         if (e.target.id === 'project-modal') closeModal();
       });
+
+      // v0.3.11：欢迎页 modal handler
+      //   - 点"知道了" → 关闭弹窗
+      //   - 如果勾选了"不再提醒" → state.dismissedIntro = true 持久化,以后刷新不再弹
+      //   - modal 背景点击 (非内容区) 也关闭,不持久化 dismissedIntro (跟点 X 一样的行为)
+      const introModal = document.getElementById('intro-modal');
+      const introCheckbox = document.getElementById('intro-no-remind');
+      const closeIntro = (persist) => {
+        if (persist && introCheckbox.checked) {
+          state.dismissedIntro = true;
+          saveState();
+        }
+        introModal.classList.add('hidden');
+      };
+      document.getElementById('intro-confirm').addEventListener('click', () => closeIntro(true));
+      introModal.addEventListener('click', (e) => {
+        if (e.target.id === 'intro-modal') closeIntro(false);
+      });
+
+      // v0.3.11：首次加载时,如果用户没勾选过"不再提醒",自动弹欢迎页
+      //   放在所有 init 完成后 (日历已经渲染好,modal 弹在它上面,体验连贯)
+      if (!state.dismissedIntro) {
+        // 重置 checkbox 状态 (避免上次会话的 checkbox 状态被浏览器 autofill 进来)
+        introCheckbox.checked = false;
+        introModal.classList.remove('hidden');
+      }
     }
 
     init();
