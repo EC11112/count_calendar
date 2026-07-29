@@ -916,6 +916,7 @@
       <div class="stats-actions">
         <button id="edit-toggle" class="header-icon-btn" title="编辑模式（刷新自动关闭）：关时点击日历不会修改记录，开时点击切换 active 项目在该日期的状态（工时类 0→半天→整天，非工时类 0→√）" aria-label="编辑模式">✎</button>
         <button id="help-btn" class="header-icon-btn" title="帮助：重新打开功能介绍弹窗" aria-label="帮助">?</button>
+        <button id="install-btn" class="header-icon-btn" title="下载 / 部署为本地应用（浏览器支持 PWA 时优先弹安装提示）" aria-label="下载/部署">📥</button>
         <button id="settings-btn" class="header-icon-btn" title="设置" aria-label="设置">⚙</button>
       </div>
       <h2 id="stats-title">统计</h2>
@@ -1959,6 +1960,19 @@
     //   - 刷新页面自动退出 (不入 localStorage,防止上次忘了关然后刷新后还开着,误记录)
     //   - 不入 state,不入 localStorage
     let _editMode = false;
+    // v0.3.11：PWA install 事件 —— 浏览器觉得页面可安装时触发,存下来给 📥 按钮用
+    //   单文件 HTML 没 manifest + service worker,大部分浏览器不会触发 (降级到下载 HTML)
+    //   等用户后续加了 manifest 才会真正用上
+    let _installPromptEvent = null;
+    window.addEventListener('beforeinstallprompt', (e) => {
+      // 阻止 Chrome 自己的 mini-infobar,改用我们自己的 📥 按钮
+      e.preventDefault();
+      _installPromptEvent = e;
+    });
+    window.addEventListener('appinstalled', () => {
+      _installPromptEvent = null;
+      showToast('已成功安装为本地应用');
+    });
     function showToast(msg, type) {
       const el = document.getElementById('toast');
       if (!el) return;
@@ -2518,6 +2532,30 @@
         introModal.classList.remove('hidden');
       });
 
+      // v0.3.11：下载/部署按钮 —— 优先触发 PWA install (beforeinstallprompt),不支持则降级到下载当前 HTML
+      //   - 浏览器触发 beforeinstallprompt 时存 _installPromptEvent
+      //   - 点击时:有 event 就 prompt() (弹原生安装提示),否则走 downloadHtml() 下载
+      //   - 单文件 HTML 没 manifest + service worker,大部分浏览器不会触发 PWA install,会走下载分支
+      document.getElementById('install-btn').addEventListener('click', async () => {
+        if (_installPromptEvent) {
+          try {
+            _installPromptEvent.prompt();
+            const choice = await _installPromptEvent.userChoice;
+            if (choice.outcome === 'accepted') {
+              showToast('正在安装为本地应用…');
+            } else {
+              showToast('已取消安装');
+            }
+          } catch (e) {
+            // prompt() 失败时降级到下载
+            downloadHtml();
+          }
+          _installPromptEvent = null;
+        } else {
+          downloadHtml();
+        }
+      });
+
       // v0.3.11：首次加载时,如果用户没勾选过"不再提醒",自动弹欢迎页
       //   放在所有 init 完成后 (日历已经渲染好,modal 弹在它上面,体验连贯)
       if (!state.dismissedIntro) {
@@ -2525,6 +2563,25 @@
         introCheckbox.checked = false;
         introModal.classList.remove('hidden');
       }
+    }
+
+    // v0.3.11：下载当前 HTML 到本地 —— PWA 不可用时的降级方案
+    //   用 document.documentElement.outerHTML 序列化当前 DOM
+    //   - 简单可靠,不用 fetch (file:// 协议下 fetch 可能因 CORS 失败)
+    //   - 当前 DOM 结构跟源文件一致 (JS 只改 state 不改 DOM 结构)
+    //   - localStorage 数据是独立存储,不会随 HTML 一起下载 (打开新下载的 HTML 是空数据)
+    function downloadHtml() {
+      const html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+      const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `count-calendar-${new Date().toISOString().slice(0, 10)}.html`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      showToast('已下载 count-calendar.html,可双击在浏览器打开');
     }
 
     init();

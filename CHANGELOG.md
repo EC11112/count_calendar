@@ -109,6 +109,27 @@
 - 编辑项目时如果项目用的是自定义色（非 COLORS 里的色），会自动把自定义 input 的 value 设成项目色 + 标 selected
 - CSS 优化：`.color-picker` 从 grid 改成 flex column,拆出 `.color-custom-row` 和 `.color-presets`；自定义 input 隐藏 native dropdown 箭头,跟 swatch 视觉对齐
 
+### 12. 下载/部署为本地应用按钮（📥）
+
+- 顶部 stats panel 在 `?` 和 `⚙` 之间加 `📥` 按钮（顺序：✎ ? 📥 ⚙）
+- **双模式工作**：
+  - 浏览器支持 PWA install → 监听 `beforeinstallprompt` 事件存 event → 点击按钮时调 `event.prompt()` 弹原生安装提示
+  - 用户接受安装 → `appinstalled` 事件触发 → toast「已成功安装为本地应用」
+  - 用户取消安装 → toast「已取消安装」
+  - 浏览器不支持 / 没触发 `beforeinstallprompt` → 降级到下载当前 HTML（`<a download>` 触发浏览器下载）
+- **降级方案 `downloadHtml()`**：
+  - 用 `document.documentElement.outerHTML` 序列化当前 DOM
+  - 加 `<!DOCTYPE html>` 前缀（避免某些浏览器把下载的 .html 当 XML）
+  - `Blob` → `URL.createObjectURL` → 临时 `<a>` 触发下载 → `revokeObjectURL` 清理
+  - 文件名：`count-calendar-YYYY-MM-DD.html`（带下载日期）
+  - 不用 `fetch()` 避免 `file://` 协议下 CORS 失败
+  - localStorage 数据不一起下载（打开新下载的 HTML 是空数据,跟原页面隔离）
+- **重要限制**：单文件 HTML 没有 manifest + service worker,**大部分现代浏览器不会触发 PWA install 提示**,会直接走下载分支
+  - 真要让 PWA install 工作,需额外加 `manifest.json` + service worker,破坏单文件原则
+  - 当前实现保证按钮永远有用（不依赖 PWA 触发）
+- tooltip:「下载 / 部署为本地应用（浏览器支持 PWA 时优先弹安装提示）」
+- aria-label:「下载/部署」
+
 ## v0.3.10 — 2026-07-29
 
 **数据导出/导入 (跨浏览器迁移 + 备份) + 数据结构优化**
