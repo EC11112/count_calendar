@@ -1016,7 +1016,7 @@
     //   - appVersion: 跟着代码走 (const),导出时写入,用来跟用户沟通时定位版本
     //   - schemaVersion: 数据结构版本,导入时校验,未来加字段时升 v2 并写 migration
     // 关系: 一次代码部署对应一个 APP_VERSION;同一个 APP_VERSION 下 schema 多次升级也是可能的
-    const APP_VERSION = '0.3.12';
+    const APP_VERSION = '0.3.13';
     const SCHEMA_VERSION = 1;
     const HOURS_PER_DAY = 8;
     const COLORS = [
@@ -1066,16 +1066,24 @@
     function shouldShowBadge(cellSize) { return cellSize >= BADGE_MIN_CELLSIZE; }
 
     function calculateStripLayout(containerWidth) {
-      // v0.3.4+：季/年视图选列算法（从 maxStripCols 向下试 7 的倍数，第一个 cellSize >= 41 的列数即为最优）
+      // v0.3.4+：季/年视图选列算法（从 maxStripCols 向下试 7 的倍数，第一个 cellSize >= sanity 的列数即为最优）
       // 月视图不走这里，renderSingleMonth 直接传 cols=7
       const maxCols = state.maxStripCols || DEFAULT_MAX_STRIP_COLS;
       const maxAligned = Math.floor(maxCols / 7) * 7;
+      const cap = state.maxCellSize || 80;
+      // v0.3.13 修复：sanity check 用 min(MIN_CELL_SIZE, cap) 而不是写死 41
+      //   bug: 当 cap < MIN_CELL_SIZE (比如 cap=40 slider 下限) 时, cellSize 永远 <= 40 < 41,
+      //   算法永远找不到通过条件的列, fallback 到 MIN_STRIP_COLS=7 (1 周)
+      //   即使 mainW 足够装 42 列 × 40px, 也只能塌缩到 1 周
+      //   修复: sanity = min(41, cap), 这样 cap=40 时 sanity=40, 42 列 cellSize=40 能通过
+      //   用户的 cap 是 "上限", 算法的 sanity 应该是 "上限优先" 而不是固定 41
+      const minCell = Math.min(MIN_CELL_SIZE, cap);
       for (let cols = maxAligned; cols >= MIN_STRIP_COLS; cols -= 7) {
         const cellSize = calcCellSize(containerWidth, cols);
-        if (cellSize >= MIN_CELL_SIZE) return { cols, cellSize };
+        if (cellSize >= minCell) return { cols, cellSize };
       }
-      // 极窄屏兜底：用 7 列（cellSize 可能 < 41）
-      return { cols: MIN_STRIP_COLS, cellSize: calcCellSize(containerWidth, MIN_STRIP_COLS) };
+      // 兜底: 用用户期望的列数, cellSize 走 calcCellSize 自动按 mainW 缩
+      return { cols: maxAligned, cellSize: calcCellSize(containerWidth, maxAligned) };
     }
     // v0.3.4+：统一所有视图的格子大小算法
     // - raw = (mainW - gap*(cols-1)) / cols

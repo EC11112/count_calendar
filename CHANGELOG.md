@@ -1,5 +1,48 @@
 # Changelog
 
+## v0.3.13 — 2026-07-29
+
+**修 bug：最大显示星期=7 + 方块大小上限=40 时，季/年视图塌缩到 1 个星期列**
+
+### 1. 复现条件
+
+- 设置菜单 → 「最大显示星期」= 7（对应 `state.maxStripCols=49`）+「方块大小上限」= 40（slider 下限）
+- 切换到「季」或「年」视图
+- 现象：13 周（季）/ 52 周（年）全部堆在 1 个 7 天宽的列里，13 行 / 52 行垂直排成"超长列"
+- 视觉上完全失去"周并排"的横向扫读能力
+
+### 2. 根因
+
+- `calculateStripLayout` 算法写死了 sanity check = `MIN_CELL_SIZE=41`
+- `maxCellSize` slider 最小 40，所以 cap 永远 <= 40 < 41
+- 算法循环永远找不到 `cellSize >= 41` 的列数
+- fallback 用 `MIN_STRIP_COLS=7` (1 周)，所以无论 mainW 多宽都塌缩到 1 周
+- 关键 bug：cap=40 跟 MIN_CELL_SIZE=41 矛盾，用户的"格子 40px"诉求被算法的"格子 >= 41px"硬下限否决
+
+### 3. 修复
+
+- `calculateStripLayout` 改用 `const minCell = Math.min(MIN_CELL_SIZE, cap)`，sanity 不超过用户自己的 cap
+- cap=40 时 sanity=40, cap=80 时 sanity=41 (原行为不变)
+- 循环条件 `cellSize >= minCell` 让 cap=40 的用户能匹配到 42 列 layout (cellSize=40 = sanity)
+- fallback 用 `maxAligned` (用户期望的列数) 而不是 `MIN_STRIP_COLS=7`
+  - 即使 mainW 极窄装不下用户期望的列数, 也尊重 maxStripCols, cellSize 走 calcCellSize 自动按 mainW 缩
+  - 旧 fallback 永远选 7 列, 新 fallback 选 maxAligned, cellSize 可能 < sanity 但布局跟用户预期一致
+
+### 4. 修复后行为
+
+- maxStripCols=49 + maxCellSize=40 + mainW=607 (in-app browser 默认) → 季视图选 cols=14, cellSize=40 (2 周并排 × 7 行 = 14×7)
+- 修复前 → cols=7, cellSize=40 (1 周 × 13 行 = 7×13, 视觉塌缩)
+- maxStripCols=49 + maxCellSize=40 + mainW=1920 (宽屏) → 季视图选 cols=42, cellSize=40 (6 周并排 × 3 行 = 42×3)
+- 修复前 → 同样塌缩到 7 列
+- maxCellSize=80 (默认) → 行为完全不变 (sanity=41, 原算法生效)
+
+### 5. 月视图不受影响
+
+- `renderSingleMonth` 直接 `cols=7`，不走 `calculateStripLayout`
+- 所以"最大显示星期"和"方块大小上限"只影响季/年视图
+
+### 6. APP_VERSION 0.3.12 → 0.3.13
+
 ## v0.3.12 — 2026-07-29
 
 **icon 风格统一（界面线性黑白，欢迎页/介绍文案保留彩色）**
