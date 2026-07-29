@@ -1,5 +1,85 @@
 # Changelog
 
+## v0.3.16 — 2026-07-29
+
+**同步功能重构：独立 modal + 总开关 + 不进 export/import + UI 偏好修正**
+
+### 1. 设置菜单里"隐藏"按钮的修正
+
+- **"关闭下载按钮" → "隐藏下载按钮"**（更准确）
+- 隐藏下载按钮的 checkbox 行为修正：**不再调 closeSettingsMenu** —— 跟全屏 checkbox 行为一致
+  - 之前：勾选/取消后菜单自动关闭，体验不一致（用户可能要同时改多个）
+  - 现在：勾选/取消都保留菜单开合状态
+- **新增"隐藏同步按钮"** checkbox（在"隐藏下载按钮"下面）
+  - 勾选 → 顶部 ⇄ 按钮 display:none
+  - 同样**不关菜单**
+- 两个"隐藏"按钮的 tooltip 重新组织，意思更清楚
+
+### 2. 同步功能从设置菜单拆出到独立 modal
+
+- **不再**藏在 ⚙ 菜单的"⇄ 本地同步"section
+- 点顶部 ⇄ 按钮 → 打开独立 `#sync-modal`（跟欢迎页 modal 同款布局）
+- 同步是高级功能，单独入口，定位更清晰
+- modal 背景点击关闭 + 关闭按钮关闭
+
+### 3. 同步 modal 结构（顶部 → 底部）
+
+- **标题**："⇄ 本地同步"
+- **高级功能提示 banner**（黄色边 + 淡黄背景）：
+  > ⚠ **此为高级功能**，主要用于配合**网盘同步等软件**实现**跨终端同步**。
+  > 使用此功能**谨防数据丢失风险**（多终端同时写入可能覆盖对方）。
+  > 建议先在普通导出/导入流程里验证数据完整性,再使用自动同步。
+- **总开关**："打开同步功能" checkbox（蓝色填充醒目）
+  - 勾上才能用所有子配置项
+  - 未勾上时子配置区 `opacity 0.45 + pointer-events none`（灰显禁用）
+  - 关掉总开关会立即停掉自动导出定时器
+- **子配置区**（总开关勾上时才可交互）：
+  - 导入文件 / 选择文件... (showOpenFilePicker)
+  - 导出位置 / 选择位置... (showSaveFilePicker)
+  - 自动导出 checkbox（v0.3.16 新拆分的子开关）
+  - 导出间隔 (秒) input
+  - 立即导出 / 取消同步 按钮
+  - 状态文字
+
+### 4. 总开关 vs 自动导出（拆分 v0.3.15 的 syncEnabled）
+
+- `state.syncEnabled` 现在表示"打开同步功能"总开关
+- `state.syncAutoExport`（新增）表示"自动导出"子开关
+- 启动定时器的条件：**总开关 + 自动导出 + handle 三者都满足**
+- 默认两个都是 false
+- migration: 补两个 boolean 字段
+
+### 5. 同步配置不进 export/import JSON
+
+- 用户原话："同步菜单的设置本身不会被导入导出到json"
+- `exportData` 排除以下字段：
+  - `syncEnabled` / `syncAutoExport` / `syncInterval`（同步配置）
+  - `dismissedIntro`（欢迎页"不再提醒"，跨设备不该继承）
+  - `hideDownloadButton` / `hideSyncButton`（UI 偏好，跨设备不该继承）
+- 原因：用户换设备/换浏览器时不该自动恢复同步状态（不同设备/网盘路径不同）
+- 手动导出的 JSON 只包含核心数据（项目/日志/视图设置）
+
+### 6. 同步配置在清除数据时**不保留**
+
+- 之前 v0.3.15 把 `syncEnabled` / `syncInterval` 算 UI 偏好，clear data 时保留
+- 重新评估：同步是高级功能，配置需要用户**显式开启**
+- 现在 clear data 时调 `clearSync()` 重置总开关 + 自动导出 + 清 IDB handles + 停定时器
+- 仍然保留：`fullscreen` / `maxCellSize` / `maxStripCols` / `calPanelWidth` / `viewMode` / `viewYear` / `viewMonth` / `hideDownloadButton` / `hideSyncButton`
+
+### 7. 欢迎页文案更新
+
+- "⇄ 本地同步（高级功能）" section 标题加"高级功能"标签
+- 文案加"主要配合网盘同步等软件实现跨终端同步" + "使用谨防数据丢失风险" + "同步配置不进 export/import JSON,跨设备不会自动继承"
+- "清除数据"section 加"隐藏同步按钮"保留项 + "同步配置会清掉"
+- "设置与数据"section 加"隐藏下载按钮/隐藏同步按钮" + 提示"同步功能单独放在 ⇄ 按钮的弹窗里"
+
+### 8. renderHeader 加 ⇄ 按钮显隐
+
+- `state.hideSyncButton` 控制 `sync-btn` 的 `style.display`
+- 跟 hideDownloadButton 一致的策略
+
+### 9. APP_VERSION 0.3.15 → 0.3.16
+
 ## v0.3.15 — 2026-07-29
 
 **本地同步 (File System Access API) —— 选本地 JSON 文件做自动备份**

@@ -786,6 +786,51 @@
       flex-direction: column;
       padding: 24px;
     }
+    /* v0.3.16：本地同步 modal —— 跟欢迎页 modal 同款布局,加总开关 + 高级功能提示 */
+    .sync-content {
+      width: 460px;
+      max-width: 92vw;
+      max-height: 86vh;
+      display: flex;
+      flex-direction: column;
+      padding: 24px;
+    }
+    .sync-content h2 { margin: 0 0 12px; font-size: 18px; font-weight: 600; }
+    /* 高级功能提示 banner —— 黄色边 + 淡黄背景 (跟 .intro-highlight 蓝色区分配色) */
+    .sync-warning {
+      background: rgba(217, 119, 6, 0.08);
+      border-left: 3px solid rgb(217, 119, 6);
+      padding: 10px 12px;
+      border-radius: 4px;
+      margin-bottom: 14px;
+      font-size: 12px;
+      line-height: 1.6;
+      color: var(--text);
+    }
+    .sync-warning b { color: rgb(180, 83, 9); font-weight: 600; }
+    /* 总开关 row —— 醒目蓝色填充, 跟其他 settings-row 区分 */
+    .sync-master-toggle {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 12px;
+      background: rgba(37, 99, 235, 0.08);
+      border: 1px solid rgba(37, 99, 235, 0.25);
+      border-radius: 6px;
+      margin-bottom: 14px;
+      cursor: pointer;
+    }
+    .sync-master-label {
+      font-size: 13px;
+      color: var(--text);
+    }
+    /* 子配置区 —— 未勾总开关时 disabled 灰显 */
+    .sync-body { transition: opacity 0.2s; }
+    .sync-body.disabled {
+      opacity: 0.45;
+      pointer-events: none;
+    }
+    .sync-body.disabled * { cursor: not-allowed; }
     .intro-content h2 { margin: 0 0 16px; font-size: 18px; font-weight: 600; }
     .intro-body {
       flex: 1;
@@ -928,13 +973,20 @@
             </span>
             <input type="checkbox" id="fullscreen-input">
           </label>
-          <!-- v0.3.14：关闭下载按钮 (用户觉得顶部 4 个按钮太多, 可以隐藏 ↓) -->
+          <!-- v0.3.16：隐藏下载按钮 + 隐藏同步按钮 (用户觉得顶部按钮太多, 可以隐藏 ↓ / ⇄) -->
           <label class="settings-row">
             <span>
-              关闭下载按钮
+              隐藏下载按钮
               <span class="settings-inline-hint" title="隐藏顶部 ↓ 下载/部署按钮。如果你不需要这个功能（不打算下载 HTML 离线版,也不打算装为 PWA）,勾选后顶部更简洁。设置项本身不受影响,可在设置菜单里随时改回来。">?</span>
             </span>
             <input type="checkbox" id="hide-download-input">
+          </label>
+          <label class="settings-row">
+            <span>
+              隐藏同步按钮
+              <span class="settings-inline-hint" title="隐藏顶部 ⇄ 同步按钮。如果你不需要本地同步功能,勾选后顶部更简洁。设置项本身不受影响。">?</span>
+            </span>
+            <input type="checkbox" id="hide-sync-input">
           </label>
           <!-- v0.3.4+：滑条调控日历面板 mainW，全屏开时灰色禁用
                min = 7 × 方块上限 × 1.1（一周大小 + 10% 余量）
@@ -955,59 +1007,8 @@
             <button class="btn btn-ghost btn-compact" id="import-data-btn" title="从 JSON 文件恢复数据 (会覆盖当前所有数据)">导入数据</button>
           </div>
           <p class="settings-hint">跨浏览器迁移、备份恢复用；导入会覆盖当前所有数据。</p>
-          <!-- v0.3.15：本地同步 (File System Access API) ——
-               选本地 JSON 文件做自动备份：启动时自动导入, 可选开启每 N 秒自动导出
-               限制: Chrome/Edge 86+, HTTPS/localhost, 需用户授权 picker
-               handle 存 IndexedDB 跨 session 复用 (Chrome 102+) -->
-          <div class="settings-divider"></div>
-          <div class="sync-section" id="sync-section">
-            <p class="settings-section-title">⇄ 本地同步</p>
-            <p class="settings-hint">
-              选一个本地 JSON 文件做自动备份。启动时自动读入对比;
-              开启自动导出后, 每 <span id="sync-interval-display">5</span> 秒对比一次,
-              当前数据有变化就写回文件。
-              <br><b>需 Chrome / Edge 86+ + HTTPS 或 localhost</b>。Firefox / Safari / file:// 不支持。
-            </p>
-            <div class="settings-row">
-              <span>
-                导入文件
-                <span class="settings-inline-hint" title="选一个本地 JSON 文件作为数据源。启动时自动读取, 跟当前数据对比, 不一致会提示导入。">?</span>
-              </span>
-              <div class="settings-row-actions">
-                <span class="settings-file-name" id="sync-import-name">(未选)</span>
-                <button class="btn btn-ghost btn-compact" id="sync-import-btn">选择文件...</button>
-              </div>
-            </div>
-            <div class="settings-row">
-              <span>
-                导出位置
-                <span class="settings-inline-hint" title="选一个本地 JSON 文件作为导出目标。开启自动导出后, 每 N 秒对比当前数据和文件内容, 不一致就写回。">?</span>
-              </span>
-              <div class="settings-row-actions">
-                <span class="settings-file-name" id="sync-export-name">(未选)</span>
-                <button class="btn btn-ghost btn-compact" id="sync-export-btn">选择位置...</button>
-              </div>
-            </div>
-            <label class="settings-row">
-              <span>
-                自动导出
-                <span class="settings-inline-hint" title="开启后, 每 N 秒对比当前数据和导出文件, 不一致就自动写回文件。关闭后只手动触发。">?</span>
-              </span>
-              <input type="checkbox" id="sync-enabled-input">
-            </label>
-            <label class="settings-row">
-              <span>
-                导出间隔 (秒)
-                <span class="settings-inline-hint" title="自动导出的检查间隔, 单位秒。范围 1-300, 默认 5。太短可能频繁写文件。">?</span>
-              </span>
-              <input type="number" id="sync-interval-input" min="1" max="300" step="1">
-            </label>
-            <div class="settings-row settings-row-buttons">
-              <button class="btn btn-ghost btn-compact" id="sync-trigger-export-btn" title="立即把当前数据写入导出文件 (不等到下次自动检查)">立即导出</button>
-              <button class="btn btn-ghost btn-compact" id="sync-clear-btn" title="清掉导入/导出 handle, 关闭所有同步功能">取消同步</button>
-            </div>
-            <p class="settings-hint" id="sync-status">未配置同步</p>
-          </div>
+          <!-- v0.3.16：本地同步配置从设置菜单移到独立 modal（点 ⇄ 按钮打开）,
+               同步配置本身 (syncEnabled / syncAutoExport / syncInterval + handle) 不进 export/import JSON -->
         </div>
       </div>
 
@@ -1098,15 +1099,15 @@
         </div>
         <div class="intro-section">
           <h4>🗑 清除数据</h4>
-          <p>项目编辑模式下中间的 <b>🗑 清除数据</b> 按钮可完全恢复到首次启动状态:清空所有项目 + 日志 + 欢迎弹窗的"不再提醒"设置,恢复默认 3 个项目（学习/运动/工作）。视图设置（全屏/格子大小/隐藏下载按钮）会保留。建议清除前先导出备份。</p>
+          <p>项目编辑模式下中间的 <b>🗑 清除数据</b> 按钮可完全恢复到首次启动状态:清空所有项目 + 日志 + 欢迎弹窗的"不再提醒"设置,恢复默认 3 个项目（学习/运动/工作）。视图设置（全屏/格子大小/隐藏下载按钮/隐藏同步按钮）会保留,同步配置会清掉。建议清除前先导出备份。</p>
         </div>
         <div class="intro-section">
           <h4>⚙ 设置与数据</h4>
-          <p>右上 ⚙ 菜单可切换<b>全屏 / 调整日历宽度</b>,以及<b>导出 / 导入 JSON</b> 用于跨浏览器迁移和备份。</p>
+          <p>右上 ⚙ 菜单可切换<b>全屏 / 调整日历宽度 / 隐藏下载按钮 / 隐藏同步按钮</b>,以及<b>导出 / 导入 JSON</b> 用于跨浏览器迁移和备份。同步功能单独放在 <b>⇄</b> 按钮的弹窗里（高级功能）。</p>
         </div>
         <div class="intro-section">
-          <h4>⇄ 本地同步</h4>
-          <p>顶部 <b>⇄</b> 按钮打开本地同步: 选一个 JSON 文件做自动备份。启动时自动读入对比;开启自动导出后,每 N 秒对比一次,数据有变化就写回文件。需 <b>Chrome/Edge 86+ + HTTPS</b>。</p>
+          <h4>⇄ 本地同步（高级功能）</h4>
+          <p>顶部 <b>⇄</b> 按钮打开同步弹窗。<b>主要配合网盘同步等软件实现跨终端同步</b>。选一个 JSON 文件, 启动时自动读入对比;开启自动导出后,每 N 秒对比一次,数据有变化就写回文件。<b>使用谨防数据丢失风险</b>（多终端同时写入可能覆盖对方）。需 <b>Chrome/Edge 86+ + HTTPS</b>。同步配置不进 export/import JSON,跨设备不会自动继承。</p>
         </div>
       </div>
       <div class="intro-footer">
@@ -1114,6 +1115,80 @@
           <input type="checkbox" id="intro-no-remind"> 不再提醒
         </label>
         <button class="btn btn-primary" id="intro-confirm">知道了</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- v0.3.16：本地同步独立 modal (从设置菜单拆出来, 同步是高级功能, 单独入口)
+       顶部"打开同步功能"显式总开关 —— 勾上才能用其他功能
+       同步配置 (syncEnabled / syncAutoExport / syncInterval + handle) 不进 export/import JSON -->
+  <div class="modal hidden" id="sync-modal">
+    <div class="modal-content sync-content">
+      <h2>⇄ 本地同步</h2>
+      <!-- 高级功能提示 banner -->
+      <div class="sync-warning">
+        ⚠ <b>此为高级功能</b>，主要用于配合<b>网盘同步等软件</b>实现<b>跨终端同步</b>。
+        使用此功能<b>谨防数据丢失风险</b>（多终端同时写入可能覆盖对方）。
+        建议先在普通导出/导入流程里验证数据完整性,再使用自动同步。
+      </div>
+      <!-- 总开关 -->
+      <label class="sync-master-toggle">
+        <span class="sync-master-label">
+          <b>打开同步功能</b>
+          <span class="settings-inline-hint" title="勾选后才能选文件、调自动导出等。未勾选时,所有同步相关功能不工作（不会启动定时器,选文件按钮也无效）。">?</span>
+        </span>
+        <input type="checkbox" id="sync-master-input">
+      </label>
+      <!-- 同步配置子项 (未勾总开关时 disabled) -->
+      <div class="sync-body" id="sync-body">
+        <p class="settings-hint">
+          选一个本地 JSON 文件做自动备份。启动时自动读入对比;
+          开启自动导出后, 每 <span id="sync-interval-display">5</span> 秒对比一次,
+          当前数据有变化就写回文件。
+          <br><b>需 Chrome / Edge 86+ + HTTPS 或 localhost</b>。Firefox / Safari / file:// 不支持。
+        </p>
+        <div class="settings-row">
+          <span>
+            导入文件
+            <span class="settings-inline-hint" title="选一个本地 JSON 文件作为数据源。启动时自动读取, 跟当前数据对比, 不一致会提示导入。">?</span>
+          </span>
+          <div class="settings-row-actions">
+            <span class="settings-file-name" id="sync-import-name">(未选)</span>
+            <button class="btn btn-ghost btn-compact" id="sync-import-btn">选择文件...</button>
+          </div>
+        </div>
+        <div class="settings-row">
+          <span>
+            导出位置
+            <span class="settings-inline-hint" title="选一个本地 JSON 文件作为导出目标。开启自动导出后, 每 N 秒对比当前数据和文件内容, 不一致就写回。">?</span>
+          </span>
+          <div class="settings-row-actions">
+            <span class="settings-file-name" id="sync-export-name">(未选)</span>
+            <button class="btn btn-ghost btn-compact" id="sync-export-btn">选择位置...</button>
+          </div>
+        </div>
+        <label class="settings-row">
+          <span>
+            自动导出
+            <span class="settings-inline-hint" title="开启后, 每 N 秒对比当前数据和导出文件, 不一致就自动写回文件。关闭后只手动触发。">?</span>
+          </span>
+          <input type="checkbox" id="sync-auto-input">
+        </label>
+        <label class="settings-row">
+          <span>
+            导出间隔 (秒)
+            <span class="settings-inline-hint" title="自动导出的检查间隔, 单位秒。范围 1-300, 默认 5。太短可能频繁写文件。">?</span>
+          </span>
+          <input type="number" id="sync-interval-input" min="1" max="300" step="1">
+        </label>
+        <div class="settings-row settings-row-buttons">
+          <button class="btn btn-ghost btn-compact" id="sync-trigger-export-btn" title="立即把当前数据写入导出文件 (不等到下次自动检查)">立即导出</button>
+          <button class="btn btn-ghost btn-compact" id="sync-clear-btn" title="清掉导入/导出 handle, 关闭所有同步功能">取消同步</button>
+        </div>
+        <p class="settings-hint" id="sync-status">未配置同步</p>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-primary" id="sync-modal-close">关闭</button>
       </div>
     </div>
   </div>
@@ -1127,7 +1202,7 @@
     //   - appVersion: 跟着代码走 (const),导出时写入,用来跟用户沟通时定位版本
     //   - schemaVersion: 数据结构版本,导入时校验,未来加字段时升 v2 并写 migration
     // 关系: 一次代码部署对应一个 APP_VERSION;同一个 APP_VERSION 下 schema 多次升级也是可能的
-    const APP_VERSION = '0.3.15';
+    const APP_VERSION = '0.3.16';
     const SCHEMA_VERSION = 1;
     const HOURS_PER_DAY = 8;
     const COLORS = [
@@ -1255,11 +1330,17 @@
       // v0.3.14：隐藏下载按钮 (默认 false = 显示,勾选后隐藏顶部的 ↓ 下载/部署按钮)
       //   适用场景: 用户不需要这个功能 (如工作电脑统一管理应用部署), 关掉让顶部更简洁
       hideDownloadButton: false,
+      // v0.3.16：隐藏同步按钮 (默认 false = 显示,勾选后隐藏顶部的 ⇄ 同步按钮)
+      hideSyncButton: false,
       // v0.3.15：本地同步 (File System Access API) 用户配置
       //   开启 + 选了导入文件: 启动时自动读文件 → 跟当前 state 对比 → 不一致就提示导入
-      //   开启 + 选了导出文件 + syncEnabled: 每 syncInterval 秒对比 → 不一致就写文件
+      //   开启 + 选了导出文件 + syncAutoExport: 每 syncInterval 秒对比 → 不一致就写文件
       //   handle 不存 state (不能 JSON 序列化), 单独存 IndexedDB
+      // v0.3.16：syncEnabled 现在是"打开同步功能"总开关 (modal 顶部 checkbox)
+      //   syncAutoExport 是"自动导出"子开关 (在 syncEnabled=true 时才生效)
+      //   同步配置 export/import 时全部排除, 不入 JSON (高级功能 + 用户显式开关, 不该迁移)
       syncEnabled: false,
+      syncAutoExport: false,
       syncInterval: 5  // 自动导出间隔, 秒
     };
 
@@ -1349,7 +1430,11 @@
       if (typeof state.hideDownloadButton !== 'boolean') state.hideDownloadButton = false;
       // v0.3.15：本地同步配置 (handle 不在这里, IndexedDB 存)
       if (typeof state.syncEnabled !== 'boolean') state.syncEnabled = false;
+      // v0.3.16：syncAutoExport 子开关
+      if (typeof state.syncAutoExport !== 'boolean') state.syncAutoExport = false;
       if (typeof state.syncInterval !== 'number' || state.syncInterval < 1) state.syncInterval = 5;
+      // v0.3.16：hideSyncButton 迁移
+      if (typeof state.hideSyncButton !== 'boolean') state.hideSyncButton = false;
       saveState();
     }
     function saveState() {
@@ -1378,11 +1463,26 @@
     //   "fullscreen": true, "calPanelWidth": null
     // }
     function exportData() {
+      // v0.3.16：排除同步相关字段 + 文件 handle 状态
+      //   同步是高级功能, 配置不该进导出 JSON (用户换设备/换浏览器时不该自动恢复同步状态)
+      //   - syncEnabled / syncAutoExport / syncInterval: 同步配置
+      //   - syncImportHandle / syncExportHandle: handle 名 (handle 本身不存 state, 这里防御性排除)
+      //   - dismissedIntro: 欢迎页"不再提醒"标记, 也排除 (用户重装/迁移应该重新看到欢迎页)
+      //   - hideDownloadButton / hideSyncButton: UI 偏好, 排除 (跨设备不该继承)
+      const excluded = [
+        'syncEnabled', 'syncAutoExport', 'syncInterval',
+        'syncImportHandle', 'syncExportHandle',
+        'dismissedIntro', 'hideDownloadButton', 'hideSyncButton'
+      ];
+      const cleanState = {};
+      for (const key of Object.keys(state)) {
+        if (!excluded.includes(key)) cleanState[key] = state[key];
+      }
       const payload = {
         schemaVersion: SCHEMA_VERSION,
         appVersion: APP_VERSION,
         exportedAt: new Date().toISOString(),
-        ...JSON.parse(JSON.stringify(state))  // 深拷贝,避免引用泄露
+        ...JSON.parse(JSON.stringify(cleanState))  // 深拷贝,避免引用泄露
       };
       const json = JSON.stringify(payload, null, 2);
       const blob = new Blob([json], { type: 'application/json' });
@@ -1678,6 +1778,9 @@
       // v0.3.14：下载/部署按钮显隐 (受 state.hideDownloadButton 控制)
       const installBtn = document.getElementById('install-btn');
       if (installBtn) installBtn.style.display = state.hideDownloadButton ? 'none' : '';
+      // v0.3.16：同步按钮显隐 (受 state.hideSyncButton 控制)
+      const syncBtn = document.getElementById('sync-btn');
+      if (syncBtn) syncBtn.style.display = state.hideSyncButton ? 'none' : '';
 
       // v0.3.4+：月/季/年统一 .cal-view，不再按 viewMode 切换显隐
     }
@@ -2284,8 +2387,8 @@
       if (_syncImportHandle) {
         await autoImportOnStartup();
       }
-      // 启动时自动启动定时器 (如果 syncEnabled)
-      if (state.syncEnabled && _syncExportHandle) {
+      // 启动时自动启动定时器 (总开关 + 自动导出 + handle 都满足)
+      if (state.syncEnabled && state.syncAutoExport && _syncExportHandle) {
         startAutoExport();
       }
     }
@@ -2328,10 +2431,10 @@
       saveState();
       renderAll();
     }
-    // 启动自动导出定时器
+    // 启动自动导出定时器 —— 需要总开关 + 自动导出子开关 + handle 都满足
     function startAutoExport() {
       stopAutoExport();
-      if (!_syncExportHandle || !state.syncEnabled) return;
+      if (!_syncExportHandle || !state.syncEnabled || !state.syncAutoExport) return;
       const seconds = Math.max(1, Math.min(300, state.syncInterval || 5));
       _syncTimerId = setInterval(autoExportTick, seconds * 1000);
     }
@@ -2340,7 +2443,7 @@
     }
     // 定时器 callback: 读文件 → 对比 → 不一致就写
     async function autoExportTick() {
-      if (!_syncExportHandle || !state.syncEnabled) {
+      if (!_syncExportHandle || !state.syncEnabled || !state.syncAutoExport) {
         stopAutoExport();
         return;
       }
@@ -2363,6 +2466,13 @@
       }
     }
     // 同步状态 UI 更新
+    // v0.3.16：根据总开关切换子配置区的 disabled 样式
+    //   总开关未勾 → 子配置 opacity 0.45 + pointer-events none + cursor not-allowed
+    //   总开关已勾 → 子配置恢复正常
+    function updateSyncBodyDisabled() {
+      const body = document.getElementById('sync-body');
+      if (body) body.classList.toggle('disabled', !state.syncEnabled);
+    }
     function updateSyncStatusUI() {
       const importNameEl = document.getElementById('sync-import-name');
       const exportNameEl = document.getElementById('sync-export-name');
@@ -2381,14 +2491,17 @@
         if (!isFileSystemAccessSupported()) {
           statusEl.textContent = '⚠ 浏览器不支持 File System Access API (需 Chrome/Edge 86+ + HTTPS)';
           statusEl.style.color = 'var(--warn, #d97706)';
+        } else if (!state.syncEnabled) {
+          statusEl.textContent = '同步功能未开启 (上方总开关)';
+          statusEl.style.color = '';
         } else if (_syncImportHandle || _syncExportHandle) {
           const parts = [];
           if (_syncImportHandle) parts.push('启动时自动导入 ✓');
-          if (_syncExportHandle) parts.push(state.syncEnabled ? `每 ${state.syncInterval}s 自动导出 ✓` : '自动导出未开启');
+          if (_syncExportHandle) parts.push(state.syncAutoExport ? `每 ${state.syncInterval}s 自动导出 ✓` : '自动导出未开启');
           statusEl.textContent = parts.join(' | ');
           statusEl.style.color = '';
         } else {
-          statusEl.textContent = '未配置同步';
+          statusEl.textContent = '已开启, 请选文件/位置';
           statusEl.style.color = '';
         }
       }
@@ -2434,8 +2547,8 @@
         await idbSave('export', handle);
         updateSyncStatusUI();
         showToast(`已选导出位置: ${handle.name}`);
-        // 如果 syncEnabled=true, 启动定时器
-        if (state.syncEnabled) startAutoExport();
+        // 如果总开关 + 自动导出子开关都开, 启动定时器
+        if (state.syncEnabled && state.syncAutoExport) startAutoExport();
       } catch (e) {
         if (e.name !== 'AbortError') showToast('选位置失败: ' + (e.message || e.name), 'warn');
       }
@@ -2458,11 +2571,15 @@
       await idbDelete('import');
       await idbDelete('export');
       state.syncEnabled = false;
+      state.syncAutoExport = false;  // v0.3.16：子开关也重置
       saveState();
+      updateSyncBodyDisabled();
       updateSyncStatusUI();
-      // 同步 checkbox 状态
-      const enabledInput = document.getElementById('sync-enabled-input');
-      if (enabledInput) enabledInput.checked = false;
+      // 同步 checkbox 状态 (总开关 + 自动导出)
+      const masterInput = document.getElementById('sync-master-input');
+      if (masterInput) masterInput.checked = false;
+      const autoInput = document.getElementById('sync-auto-input');
+      if (autoInput) autoInput.checked = false;
       showToast('已取消所有同步配置');
     }
     function showToast(msg, type) {
@@ -2898,31 +3015,76 @@
         syncCalWidthSlider();
         renderCalendar();
       });
-      // v0.3.14：关闭下载按钮 —— toggle state.hideDownloadButton + 立即更新 install-btn 显隐
+      // v0.3.14→v0.3.16：隐藏下载按钮 —— toggle state.hideDownloadButton + 立即更新 install-btn 显隐
       //   不用 renderAll (太重), 只调 renderHeader 同步 install-btn 就行
+      //   v0.3.16 行为修正: 不再调 closeSettingsMenu —— 跟全屏 checkbox 行为一致, 勾选/取消都不关菜单
       if (hideDownloadInput) {
         hideDownloadInput.addEventListener('change', () => {
           state.hideDownloadButton = hideDownloadInput.checked;
           saveState();
           renderHeader();
-          closeSettingsMenu();
         });
       }
-      // v0.3.15：本地同步 (File System Access API) ——
-      //   同步按钮 → 打开设置菜单并滚动到同步 section
-      //   同步 section 里的 input/button 处理:
+      // v0.3.16：隐藏同步按钮 —— toggle state.hideSyncButton + 立即更新 sync-btn 显隐
+      //   同样不关菜单, 跟 hide-download 行为一致
+      const hideSyncInput = document.getElementById('hide-sync-input');
+      if (hideSyncInput) {
+        hideSyncInput.checked = !!state.hideSyncButton;
+        hideSyncInput.addEventListener('change', () => {
+          state.hideSyncButton = hideSyncInput.checked;
+          saveState();
+          renderHeader();
+        });
+      }
+      // v0.3.16：本地同步 (File System Access API) ——
+      //   同步按钮 → 打开独立 sync modal（不再从设置菜单里走, 同步是高级功能, 单独入口）
+      //   sync modal 内的 input/button 处理:
+      //     - 总开关 checkbox → toggle state.syncEnabled + 切换子项 disabled 样式
       //     - 选择文件/位置 → showOpenFilePicker/showSaveFilePicker
-      //     - 自动导出 checkbox → toggle state.syncEnabled + 启停定时器
+      //     - 自动导出 checkbox → toggle state.syncAutoExport + 启停定时器
       //     - 导出间隔 → 更新 state.syncInterval + 重启定时器
       //     - 立即导出 → writeJsonToHandle
       //     - 取消同步 → clearSync
+      //   同步配置本身 (syncEnabled / syncAutoExport / syncInterval + handle) 不进 export/import JSON
       const syncBtn = document.getElementById('sync-btn');
+      const syncModal = document.getElementById('sync-modal');
       if (syncBtn) {
         syncBtn.addEventListener('click', () => {
-          settingsMenu.classList.remove('hidden');
-          // 滚到同步 section
-          const sec = document.getElementById('sync-section');
-          if (sec) sec.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+          if (syncModal) {
+            syncModal.classList.remove('hidden');
+            updateSyncBodyDisabled();
+            updateSyncStatusUI();
+          }
+        });
+      }
+      // 关闭按钮
+      const syncModalClose = document.getElementById('sync-modal-close');
+      if (syncModalClose && syncModal) {
+        syncModalClose.addEventListener('click', () => {
+          syncModal.classList.add('hidden');
+        });
+      }
+      // 点 modal 背景关闭 (跟 project-modal 行为一致)
+      if (syncModal) {
+        syncModal.addEventListener('click', (e) => {
+          if (e.target === syncModal) syncModal.classList.add('hidden');
+        });
+      }
+      // 总开关 (打开同步功能)
+      const syncMasterInput = document.getElementById('sync-master-input');
+      if (syncMasterInput) {
+        syncMasterInput.checked = !!state.syncEnabled;
+        syncMasterInput.addEventListener('change', () => {
+          state.syncEnabled = syncMasterInput.checked;
+          saveState();
+          updateSyncBodyDisabled();
+          // 总开关关闭 → 停定时器, 不再自动导出
+          if (!state.syncEnabled) {
+            stopAutoExport();
+          } else if (state.syncAutoExport) {
+            // 总开关打开 + 自动导出也打开 → 启动定时器
+            startAutoExport();
+          }
           updateSyncStatusUI();
         });
       }
@@ -2930,13 +3092,15 @@
       if (syncImportBtn) syncImportBtn.addEventListener('click', pickSyncImportFile);
       const syncExportBtn = document.getElementById('sync-export-btn');
       if (syncExportBtn) syncExportBtn.addEventListener('click', pickSyncExportFile);
-      const syncEnabledInput = document.getElementById('sync-enabled-input');
-      if (syncEnabledInput) {
-        syncEnabledInput.checked = !!state.syncEnabled;
-        syncEnabledInput.addEventListener('change', () => {
-          state.syncEnabled = syncEnabledInput.checked;
+      // v0.3.16：自动导出 checkbox (子开关) — 改 id 为 sync-auto-input
+      const syncAutoInput = document.getElementById('sync-auto-input');
+      if (syncAutoInput) {
+        syncAutoInput.checked = !!state.syncAutoExport;
+        syncAutoInput.addEventListener('change', () => {
+          state.syncAutoExport = syncAutoInput.checked;
           saveState();
-          if (state.syncEnabled) startAutoExport();
+          // 只有总开关 + 自动导出都开才启定时器
+          if (state.syncEnabled && state.syncAutoExport) startAutoExport();
           else stopAutoExport();
           updateSyncStatusUI();
         });
@@ -2951,7 +3115,8 @@
           syncIntervalInput.value = v;
           state.syncInterval = v;
           saveState();
-          if (state.syncEnabled) startAutoExport();  // 重启定时器
+          // 间隔变化 → 重启定时器 (如果总开关 + 自动导出都开)
+          if (state.syncEnabled && state.syncAutoExport) startAutoExport();
           updateSyncStatusUI();
         });
       }
@@ -3000,11 +3165,13 @@
           `确定清除？`
         );
         if (!ok) return;
-        // v0.3.15：清数据时也停掉本地同步 (handle + 定时器), 跟首次启动一致
+        // v0.3.16：清数据时也停掉本地同步 (handle + 定时器 + 配置), 跟首次启动一致
+        //   同步是高级功能, 配置不跨"清数据"操作保留, 用户应该重新显式开启
         clearSync();
         // 保留视图设置,其他全清
         // v0.3.14：hideDownloadButton 也算 UI 偏好 (跟 fullscreen 一样, 是用户对界面显隐的选择, 不是数据)
-        // v0.3.15：syncEnabled / syncInterval 也算 UI 偏好 (用户对自动备份频率的选择), 保留
+        // v0.3.16：hideSyncButton 同上
+        //   同步配置 (syncEnabled/syncAutoExport/syncInterval) 不算 UI 偏好, 已通过 clearSync 清掉
         const viewSettings = {
           fullscreen: state.fullscreen,
           maxCellSize: state.maxCellSize,
@@ -3014,8 +3181,7 @@
           viewYear: state.viewYear,
           viewMonth: state.viewMonth,
           hideDownloadButton: state.hideDownloadButton,
-          syncEnabled: state.syncEnabled,
-          syncInterval: state.syncInterval
+          hideSyncButton: state.hideSyncButton
         };
         // 复制默认项目 (避免引用同一份对象,后续修改不会影响常量)
         const defaultProjects = JSON.parse(JSON.stringify(DEFAULT_PROJECTS));
