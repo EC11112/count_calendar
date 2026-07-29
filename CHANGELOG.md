@@ -1,5 +1,59 @@
 # Changelog
 
+## v0.3.10 — 2026-07-29
+
+**数据导出/导入 (跨浏览器迁移 + 备份) + 数据结构优化**
+
+### 1. 导出 / 导入
+
+- 设置菜单 (⚙) 底部新增"导出数据" / "导入数据" 两个按钮 (中间用分隔线)
+- 导出:
+  - 点按钮 → 立即触发浏览器下载 `count-calendar-backup-YYYYMMDD.json`
+  - 文件内容是完整 state (projects / logs / 设置项) + 元信息
+- 导入:
+  - 点按钮 → 弹系统文件选择器,只接受 `.json`
+  - 选完文件 → JSON.parse → 校验 schemaVersion / projects / logs 形状
+  - 校验失败 → 红色 toast 提示 (不破坏当前数据)
+  - 校验通过 → 弹系统 confirm 框,显示"将覆盖当前 N 个项目 / M 条日志"
+  - 确认后 → state 替换,save, renderAll, 黑色 toast 成功提示
+
+### 2. 数据结构优化
+
+- **加 `schemaVersion`**: state 默认值带,导入校验用 (`SCHEMA_VERSION = 1` 常量)
+  - 以后改 schema 时升 v2,导入时拒绝更高版本让用户升级 app
+- **加 `appVersion`**: state 默认值带,导出时写入 (`APP_VERSION = '0.3.10'` 常量)
+  - 用户反馈问题时能定位到具体版本
+- **修 bug**: 删除全部项目后刷新会"复活"默认项目
+  - 之前: `if (!Array.isArray(state.projects) || state.projects.length === 0)` 把 `[]` 当首次启动
+  - 现在: `if (!Array.isArray(state.projects))` 严格判 undefined,`[]` 保持空
+  - 同时去掉默认 state 里的 `projects: []` (让 undefined 状态暴露)
+- 导入数据 `state.schemaVersion` / `state.appVersion` 强制刷成当前常量值 (用户用最新 app 就用最新版本号,不要带回老版本号)
+
+### 3. 导出文件格式 (示例)
+
+```json
+{
+  "schemaVersion": 1,
+  "appVersion": "0.3.10",
+  "exportedAt": "2026-07-29T13:25:00.000Z",
+  "projects": [...],
+  "currentProjectId": "...",
+  "logs": {...},
+  "viewYear": 2026, "viewMonth": 6, "viewMode": "month",
+  "maxStripCols": 35, "maxCellSize": 80,
+  "fullscreen": true, "calPanelWidth": null
+}
+```
+
+### 4. 实施细节
+
+- `exportData()` 用 `JSON.parse(JSON.stringify(state))` 深拷贝避免引用泄露
+- `validateImportData()` 严格校验: 顶层对象 / schemaVersion (number, ≤ 当前) / projects (数组, 每项有 id+name) / logs (对象或缺失)
+- `handleImportFile()` 用 FileReader.readAsText; import 完成后重置 input.value,允许再次选同一文件
+- 导入按钮自动关闭设置菜单 (跟导出一样),让用户看到 toast 反馈
+
+---
+
 ## v0.3.9.1 — 2026-07-29
 
 **项目编辑模式 → 临时 UI 状态,刷新/切 active 自动退出**

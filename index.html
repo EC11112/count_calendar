@@ -441,6 +441,25 @@
       color: var(--text-faint);
       line-height: 1.4;
     }
+    /* v0.3.10：设置菜单里的导出/导入按钮组 (在 settings-hint 上方加分隔线) */
+    .settings-divider {
+      border-top: 1px solid var(--border);
+      margin: 12px 0 10px;
+    }
+    .settings-row-buttons {
+      gap: 8px;
+      margin-top: 0;
+    }
+    .settings-row-buttons .btn {
+      flex: 1 1 0;
+      width: auto;
+      padding: 6px 10px;
+      font-size: 12px;
+    }
+    .settings-row-buttons .btn:hover {
+      background: var(--hover);
+      color: var(--text);
+    }
 
     /* ===== Calendar: unified component (月/季/年共用) =====
        v0.3.4 重构：之前 .weekdays+.days (月) 和 .weekday-row+.day-strip (季/年) 两套，
@@ -741,6 +760,13 @@
             <input type="range" id="cal-width-input" min="0" max="0" step="10">
           </label>
           <p class="settings-hint">日期格子永远正方形；方块上限 = 最大 cellSize，实际按面板宽度算。</p>
+          <!-- v0.3.10：导出/导入数据 (跨浏览器迁移 + 备份) -->
+          <div class="settings-divider"></div>
+          <div class="settings-row settings-row-buttons">
+            <button class="btn btn-ghost btn-compact" id="export-data-btn" title="把当前所有数据 (项目 / 日志 / 设置) 导出为 JSON 文件">导出数据</button>
+            <button class="btn btn-ghost btn-compact" id="import-data-btn" title="从 JSON 文件恢复数据 (会覆盖当前所有数据)">导入数据</button>
+          </div>
+          <p class="settings-hint">跨浏览器迁移、备份恢复用；导入会覆盖当前所有数据。</p>
         </div>
       </div>
 
@@ -791,11 +817,21 @@
   <!-- v0.3.8：通用 toast 提示 (工时校验等一次性反馈) -->
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+  <!-- v0.3.10：隐藏的文件 input —— 导入数据用,点"导入"按钮时 JS 触发它 click
+       accept=".json" 限制只让选 JSON 文件;display:none 但仍在 DOM 里 -->
+  <input type="file" id="import-file-input" accept=".json,application/json" style="display:none;">
+
   <script>
     'use strict';
 
     // ========== Config ==========
     const STORAGE_KEY = 'count_calendar_v2';
+    // v0.3.10：app 版本号 + 数据 schema 版本号
+    //   - appVersion: 跟着代码走 (const),导出时写入,用来跟用户沟通时定位版本
+    //   - schemaVersion: 数据结构版本,导入时校验,未来加字段时升 v2 并写 migration
+    // 关系: 一次代码部署对应一个 APP_VERSION;同一个 APP_VERSION 下 schema 多次升级也是可能的
+    const APP_VERSION = '0.3.10';
+    const SCHEMA_VERSION = 1;
     const HOURS_PER_DAY = 8;
     const COLORS = [
       '#ef4444', '#f59e0b', '#eab308', '#10b981',
@@ -883,7 +919,15 @@
 
     // ========== State ==========
     let state = {
-      projects: [],
+      // v0.3.10：数据 schema 版本 (跟 SCHEMA_VERSION 常量绑定),导出/导入校验用
+      // v0.3.10：app 版本 (跟 APP_VERSION 常量绑定),定位用户版本用
+      schemaVersion: SCHEMA_VERSION,
+      appVersion: APP_VERSION,
+      // v0.3.10：注意没有 projects: [] 显式默认 —— 让它保持 undefined
+      //   这样 loadState 里 `if (!Array.isArray(state.projects))` 才能区分:
+      //     - undefined  -> 首次启动,套用 DEFAULT_PROJECTS
+      //     - []         -> 用户主动清空,要尊重,不要复活
+      //   之前的 `[]` 默认值 + `length===0` 判定会把用户清空列表当首次启动处理
       currentProjectId: null,
       logs: {},
       viewYear: null,
@@ -916,7 +960,10 @@
       } catch (e) {
         console.warn('loadState failed:', e);
       }
-      if (!Array.isArray(state.projects) || state.projects.length === 0) {
+      // v0.3.10：strict 检查 (不要 length===0) —— 用户主动清空列表是合法状态,不能当"首次启动"复活默认项目
+      //   undefined / 非数组 -> 首次启动,用 DEFAULT_PROJECTS
+      //   [] -> 保持空 (用户的"全删"操作)
+      if (!Array.isArray(state.projects)) {
         state.projects = DEFAULT_PROJECTS.slice();
       }
       if (!state.currentProjectId && state.projects[0]) {
@@ -929,6 +976,13 @@
       // v0.3.9.1：项目编辑模式 (projectEditMode) 不再入 state —— 删掉老数据里的残留字段
       //   之前的版本误把 _projectEditMode 当成持久字段存了 localStorage,这次彻底切到模块变量
       delete state.projectEditMode;
+      // v0.3.10：清理 v0.3.0-v0.3.3 时代的 screenRatio 字段（v0.3.4 改用 fullscreen 开关）
+      //   之前的 migration 只把 screenRatio 映射到 fullscreen 但忘了 delete,残留到 export
+      //   现在补一刀,保持 state 干净,导出文件更小
+      delete state.screenRatio;
+      // v0.3.10：补 schemaVersion / appVersion 字段 (老数据没这两个)
+      if (typeof state.schemaVersion !== 'number') state.schemaVersion = SCHEMA_VERSION;
+      if (!state.appVersion) state.appVersion = APP_VERSION;
       if (!state.logs || typeof state.logs !== 'object') state.logs = {};
       const now = new Date();
       if (state.viewYear == null || state.viewYear < 1900) state.viewYear = now.getFullYear();
@@ -978,6 +1032,115 @@
       } catch (e) {
         console.error('saveState failed:', e);
       }
+    }
+
+    // ========== Import / Export (v0.3.10) ==========
+    // 用途: 跨浏览器迁移、备份/恢复数据
+    // 导出: 完整 state + 元信息(schemaVersion, appVersion, exportedAt) → 浏览器下载 .json
+    // 导入: 选 .json 文件 → 校验 → 弹确认 → replace state + save + render
+    //
+    // 数据格式示例:
+    // {
+    //   "schemaVersion": 1,
+    //   "appVersion": "0.3.10",
+    //   "exportedAt": "2026-07-29T13:25:00.000Z",
+    //   "projects": [...],
+    //   "currentProjectId": "...",
+    //   "logs": {...},
+    //   "viewYear": 2026, "viewMonth": 6, "viewMode": "month",
+    //   "maxStripCols": 35, "maxCellSize": 80,
+    //   "fullscreen": true, "calPanelWidth": null
+    // }
+    function exportData() {
+      const payload = {
+        schemaVersion: SCHEMA_VERSION,
+        appVersion: APP_VERSION,
+        exportedAt: new Date().toISOString(),
+        ...JSON.parse(JSON.stringify(state))  // 深拷贝,避免引用泄露
+      };
+      const json = JSON.stringify(payload, null, 2);
+      const blob = new Blob([json], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const today = new Date();
+      const yyyy = today.getFullYear();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `count-calendar-backup-${yyyy}${mm}${dd}.json`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    }
+
+    // 校验导入数据,返回 { ok, data, error }
+    //   ok=true  -> data 是清洗后的 state 对象 (用户确认后再 apply)
+    //   ok=false -> error 是给用户看的错误信息 (通过 toast 显示)
+    function validateImportData(parsed) {
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        return { ok: false, error: 'JSON 顶层必须是对象' };
+      }
+      if (typeof parsed.schemaVersion !== 'number') {
+        return { ok: false, error: '数据缺少 schemaVersion 字段,可能不是本 app 的导出文件' };
+      }
+      if (parsed.schemaVersion > SCHEMA_VERSION) {
+        return { ok: false, error: `数据 schemaVersion=${parsed.schemaVersion} 比本 app (${SCHEMA_VERSION}) 新,请升级 app 后再导入` };
+      }
+      if (!Array.isArray(parsed.projects)) {
+        return { ok: false, error: '数据缺少 projects 数组' };
+      }
+      for (const p of parsed.projects) {
+        if (!p || typeof p.id !== 'string' || typeof p.name !== 'string') {
+          return { ok: false, error: 'projects 里有不合法项 (id/name 缺失)' };
+        }
+      }
+      if (parsed.logs && typeof parsed.logs !== 'object') {
+        return { ok: false, error: 'logs 字段必须是对象' };
+      }
+      return { ok: true, data: parsed };
+    }
+
+    // 导入入口:被 file input change 调用
+    // 1. FileReader 读文本
+    // 2. JSON.parse + validateImportData
+    // 3. 失败 -> toast
+    // 4. 成功 -> confirm 弹窗,确认后 state = data, save, render
+    function handleImportFile(file) {
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const text = e.target.result;
+        let parsed;
+        try { parsed = JSON.parse(text); }
+        catch (err) { showToast('不是合法的 JSON 文件', 'warn'); return; }
+        const result = validateImportData(parsed);
+        if (!result.ok) { showToast(result.error, 'warn'); return; }
+        const data = result.data;
+        const projCount = data.projects.length;
+        const logCount = data.logs ? Object.keys(data.logs).reduce((sum, k) => sum + Object.keys(data.logs[k]).length, 0) : 0;
+        const ok = confirm(
+          `导入会覆盖当前所有数据。\n\n` +
+          `待导入内容:\n` +
+          `  · ${projCount} 个项目\n` +
+          `  · ${logCount} 条日志\n` +
+          `  · schemaVersion ${data.schemaVersion} (${data.appVersion || '未知版本'})\n\n` +
+          `确定导入？`
+        );
+        if (!ok) return;
+        // 覆盖 state (用导入数据,schemaVersion/appVersion 强制刷成当前常量值)
+        //   JSON.parse(JSON.stringify(...)) 深拷贝断引用,避免导入数据被外部持有
+        state = {
+          schemaVersion: SCHEMA_VERSION,
+          appVersion: APP_VERSION,
+          ...JSON.parse(JSON.stringify(data))
+        };
+        saveState();
+        renderAll();
+        showToast(`导入成功: ${projCount} 个项目, ${logCount} 条日志`);
+      };
+      reader.onerror = () => showToast('文件读取失败', 'warn');
+      reader.readAsText(file);
     }
 
     // ========== Helpers ==========
@@ -1986,6 +2149,25 @@
       });
       document.getElementById('cancel-project').addEventListener('click', closeModal);
       document.getElementById('confirm-project').addEventListener('click', confirmProject);
+      // v0.3.10：导出/导入数据
+      //  - 点"导出"按钮 → 立即触发浏览器下载 JSON
+      //  - 点"导入"按钮 → 触发隐藏 file input,选完文件后 handleImportFile 处理
+      document.getElementById('export-data-btn').addEventListener('click', () => {
+        exportData();
+        // 关闭设置菜单,让用户看到下载
+        closeSettingsMenu();
+      });
+      const importFileInput = document.getElementById('import-file-input');
+      document.getElementById('import-data-btn').addEventListener('click', () => {
+        importFileInput.click();
+      });
+      importFileInput.addEventListener('change', (e) => {
+        const file = e.target.files && e.target.files[0];
+        handleImportFile(file);
+        // 重置 input value,这样下次选同一个文件还能触发 change
+        e.target.value = '';
+        closeSettingsMenu();
+      });
       document.getElementById('project-name').addEventListener('keydown', (e) => {
         if (e.key === 'Enter') confirmProject();
         if (e.key === 'Escape') closeModal();
