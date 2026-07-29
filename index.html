@@ -71,7 +71,7 @@
     /* v0.3.2：main panel 必须 min-width: 0，否则 grid 1fr track 会被子 grid（季/年 14-21 列）撑大 */
     main.panel { min-width: 0; }
 
-    /* v0.3.7：stats panel 顶部动作条(✏⚙),在 stats 标题之上,视觉上独立小区域 */
+    /* v0.3.7：stats panel 顶部动作条(✎⚙),在 stats 标题之上,视觉上独立小区域 */
     .stats-actions {
       display: flex;
       align-items: center;
@@ -801,32 +801,32 @@
       <!-- v0.3.11：左下三个按钮统一文本/图标格式,顺序: 新建 → 清除(仅编辑模式) → 编辑
            - 新建项目: + 前缀,默认白底灰边框 (中性)
            - 清除数据: 🗑 前缀,仅项目编辑模式下显示,红色 btn-danger (危险操作)
-           - 编辑项目: ✏ 前缀,默认白底灰边框 (中性); 切到编辑模式后变 "退出编辑" + 蓝色 btn-primary (当前正在编辑)
+           - 编辑项目: ✎ 前缀,默认白底灰边框 (中性); 切到编辑模式后变 "退出编辑" + 蓝色 btn-primary (当前正在编辑)
            - 三色区分: 白色=中性默认, 蓝色=当前态/主操作, 红色=危险操作 -->
       <div class="sidebar-bottom">
         <button class="btn" id="add-project"><span class="btn-icon">+</span><span>新建项目</span></button>
         <button class="btn btn-danger" id="clear-data" style="display:none;"><span class="btn-icon">🗑</span><span>清除数据</span></button>
-        <button class="btn" id="toggle-edit-projects"><span class="btn-icon">✏</span><span>编辑项目</span></button>
+        <button class="btn" id="toggle-edit-projects"><span class="btn-icon">✎</span><span>编辑项目</span></button>
       </div>
     </aside>
 
     <main class="panel">
       <div class="cal-header">
         <div class="nav-group">
-          <button id="prev-month" title="上一段">‹</button>
+          <button id="prev-month" title="向前">‹</button>
           <h1 id="month-label"></h1>
-          <button id="next-month" title="下一段">›</button>
+          <button id="next-month" title="向后">›</button>
           <button id="today-btn" title="跳到今天">今天</button>
         </div>
         <div class="view-toggle" id="view-toggle" role="tablist">
           <button data-view="month"   title="月视图（单月，7 列）">月</button>
-          <button data-view="quarter" title="季度视图（连续 3 个月，列数 = 星期数 × 7）">季</button>
-          <button data-view="year"    title="年视图（连续 12 个月，列数 = 星期数 × 7）">年</button>
+          <button data-view="quarter" title="季度视图（连续 3 个月，每行列数 = 最大显示星期 × 7）">季</button>
+          <button data-view="year"    title="年视图（连续 12 个月，每行列数 = 最大显示星期 × 7）">年</button>
         </div>
         <div class="settings-menu hidden" id="settings-menu">
           <label class="settings-row">
             <span>
-              星期数
+              最大显示星期
               <span class="settings-inline-hint" title="季/年视图每行几周（1 周 = 7 列）。月视图固定 1 周不生效。范围 1-7，默认 5。">?</span>
             </span>
             <input type="number" id="max-cols-input" min="1" max="7" step="1">
@@ -879,7 +879,7 @@
 
     <section class="panel stats">
       <div class="stats-actions">
-        <button id="edit-toggle" class="header-icon-btn" title="编辑模式（刷新自动关闭）：关时点击日历不会修改记录，开时点击切换 0 → 半天 → 整天" aria-label="编辑模式">✏</button>
+        <button id="edit-toggle" class="header-icon-btn" title="编辑模式（刷新自动关闭）：关时点击日历不会修改记录，开时点击切换 active 项目在该日期的状态（工时类 0→半天→整天，非工时类 0→√）" aria-label="编辑模式">✎</button>
         <button id="settings-btn" class="header-icon-btn" title="设置" aria-label="设置">⚙</button>
       </div>
       <h2 id="stats-title">统计</h2>
@@ -927,7 +927,7 @@
       <div class="intro-body">
         <div class="intro-section">
           <h4>📅 记录</h4>
-          <p>点击日期块循环记录:<b>无 → 半天 → 整天 → 无</b>。同一天可记录多个项目,用色条区分。</p>
+          <p>点击日期块循环记录:<b>工时类</b>(学习/工作) 是 无 → 半天 → 整天 → 无;<b>非工时类</b>(健身/阅读) 是 无 → √ → 无。同一天可记录多个项目,用色条区分。</p>
         </div>
         <div class="intro-section">
           <h4>👁 视图与统计</h4>
@@ -938,12 +938,12 @@
           <p>侧边栏点击 👁 切换显隐。<b>工时类</b>(半天/整天) 日合计不超过 1 天;<b>非工时类</b>(健身/阅读) 只算天。</p>
         </div>
         <div class="intro-section">
-          <h4>✏️ 编辑模式</h4>
-          <p>默认<b>只读</b>防误触,点击右上角 ✏ 进入编辑。编辑模式仅本次会话有效,刷新自动关闭。</p>
+          <h4>✎️ 编辑模式</h4>
+          <p>默认<b>只读</b>防误触,点击右上角 ✎ 进入编辑。编辑模式仅本次会话有效,刷新自动关闭。</p>
         </div>
         <div class="intro-section">
           <h4>🛠 项目编辑</h4>
-          <p>侧边栏底部 <b>✏ 编辑项目</b> 可改名/改色/改分类/删除。点击项目名可切换 active 项目(同时退出编辑模式)。</p>
+          <p>侧边栏底部 <b>✎ 编辑项目</b> 可改名/改色/改分类/删除。点击项目名可切换 active 项目(同时退出编辑模式)。</p>
         </div>
         <div class="intro-section">
           <h4>🗑 清除数据</h4>
@@ -1433,7 +1433,7 @@
     // v0.3.9：sidebar 底部"编辑项目"/"退出编辑"按钮的状态切换
     // v0.3.9.1：读模块级 _projectEditMode (不再是 state.projectEditMode)
     // v0.3.11：清空数据按钮 + 图标用 <span class="btn-icon"> 包裹便于统一样式
-    //   - 正常态: 白底灰边框 ✏ 编辑项目 (中性,跟 + 新建项目视觉一致)
+    //   - 正常态: 白底灰边框 ✎ 编辑项目 (中性,跟 + 新建项目视觉一致)
     //   - 编辑态: 蓝色填充 "退出编辑" (当前正在编辑 = 主操作状态,蓝色高亮)
     //   - 同时显示中间的 🗑 清除数据按钮 (红色 btn-danger, 区分于蓝色的当前态)
     //   - 三色分工: 白色=中性默认 / 蓝色=当前态 / 红色=危险操作
@@ -1683,7 +1683,7 @@
         //   dblclick 在 click 之后触发,所以两个 click handler 不会冲突（这里非编辑态根本没绑 click）
         cell.addEventListener('dblclick', (e) => {
           e.preventDefault();
-          showToast('温馨提示: 当前为只读模式,点击右上角 ✏ 进入编辑后再记录人天', 'tip');
+          showToast('温馨提示: 当前为只读模式,点击右上角 ✎ 进入编辑后再记录人天', 'tip');
         });
       }
       return cell;
@@ -1919,7 +1919,7 @@
     //   - 刷新页面 / 切换 active 项目都自动退出 (li click handler 里设回 false)
     //   - 不入 state,不入 localStorage (防止刷新后忘记自己开了 edit 模式误删)
     let _projectEditMode = false;
-    // v0.3.11：编辑模式 (右上角 ✏ 切换的) —— 跟 _projectEditMode 一样改为临时 UI 状态
+    // v0.3.11：编辑模式 (右上角 ✎ 切换的) —— 跟 _projectEditMode 一样改为临时 UI 状态
     //   - 刷新页面自动退出 (不入 localStorage,防止上次忘了关然后刷新后还开着,误记录)
     //   - 不入 state,不入 localStorage
     let _editMode = false;
