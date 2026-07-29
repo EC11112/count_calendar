@@ -948,7 +948,7 @@
         </div>
         <div class="intro-section">
           <h4>🗑 清除数据</h4>
-          <p>项目编辑模式下中间的 <b>🗑 清除数据</b> 按钮可清空所有日志(项目定义保留),清除前建议先导出备份。</p>
+          <p>项目编辑模式下中间的 <b>🗑 清除数据</b> 按钮可完全恢复到首次启动状态:清空所有项目 + 日志 + 欢迎弹窗的"不再提醒"设置,恢复默认 3 个项目（学习/运动/工作）。视图设置（全屏/格子大小）会保留。建议清除前先导出备份。</p>
         </div>
         <div class="intro-section">
           <h4>⚙ 设置与数据</h4>
@@ -2330,27 +2330,64 @@
         _projectEditMode = !_projectEditMode;
         renderProjects();
       });
-      // v0.3.11：清除数据按钮 —— 弹 confirm 确认后清空 state.logs
-      //   保留项目定义,只清空所有日志记录 (跟"清空 localStorage 全部"不同,后者会把项目定义也带走)
+      // v0.3.11：清除数据按钮 —— 弹 confirm 确认后**全清**到首次启动状态
+      //   - 清空所有项目定义（恢复 DEFAULT_PROJECTS）
+      //   - 清空所有日志
+      //   - 重置 dismissedIntro=false （下次打开页面会自动弹欢迎页）
+      //   - 保留视图设置（fullscreen / maxCellSize / maxStripCols / calPanelWidth / viewMode / viewYear / viewMonth）—— 这些是用户偏好不是数据
+      //   跟"清空 localStorage 全部"等价但更友好（保留视图设置）
       //   建议先导出备份再清空,这样能复原
       document.getElementById('clear-data').addEventListener('click', () => {
-        // 数一下当前有几条 log,confirm 信息更友好
+        // 数一下当前有几条 log + 项目,confirm 信息更友好
         const logCount = Object.values(state.logs || {}).reduce(
           (sum, projLogs) => sum + Object.keys(projLogs).length, 0
         );
+        const projCount = state.projects ? state.projects.length : 0;
         const ok = confirm(
-          `确定要清除所有日志数据吗？\n\n` +
-          `项目定义会保留,但会删除：\n` +
-          `  · ${logCount} 条日志记录（所有项目、所有日期）\n\n` +
+          `确定要清除所有数据吗？\n\n` +
+          `将完全恢复到首次启动状态,会删除：\n` +
+          `  · ${projCount} 个项目定义（恢复默认 3 个）\n` +
+          `  · ${logCount} 条日志记录\n` +
+          `  · 欢迎弹窗的"不再提醒"设置（下次会重新弹出）\n\n` +
+          `视图设置（全屏/格子大小/显示星期）会保留。\n` +
           `此操作不可撤销,建议先在 ⚙ 里导出备份。\n\n` +
           `确定清除？`
         );
         if (!ok) return;
-        state.logs = {};
+        // 保留视图设置,其他全清
+        const viewSettings = {
+          fullscreen: state.fullscreen,
+          maxCellSize: state.maxCellSize,
+          maxStripCols: state.maxStripCols,
+          calPanelWidth: state.calPanelWidth,
+          viewMode: state.viewMode,
+          viewYear: state.viewYear,
+          viewMonth: state.viewMonth
+        };
+        // 复制默认项目 (避免引用同一份对象,后续修改不会影响常量)
+        const defaultProjects = JSON.parse(JSON.stringify(DEFAULT_PROJECTS));
+        // 默认项目加 visible 和 kind 字段 (跟 migration 一致)
+        defaultProjects.forEach(p => {
+          if (p.visible === undefined) p.visible = true;
+          if (p.kind === undefined) p.kind = 'hours';
+        });
+        state = {
+          schemaVersion: SCHEMA_VERSION,
+          appVersion: APP_VERSION,
+          projects: defaultProjects,
+          currentProjectId: defaultProjects[0].id,
+          logs: {},
+          dismissedIntro: false,
+          ...viewSettings
+        };
+        // 编辑模式 UI 状态 (模块级) 也要重置,避免"清完数据还显示着删除按钮"
+        _projectEditMode = false;
+        _editMode = false;
         saveState();
-        renderCalendar();
-        renderStats();
-        showToast(`已清除 ${logCount} 条日志`);
+        renderAll();
+        // 关闭设置菜单 (如果有打开),让用户看到恢复后的界面
+        closeSettingsMenu();
+        showToast(`已清除 ${projCount} 个项目 + ${logCount} 条日志,欢迎弹窗下次会重新显示`);
       });
       document.getElementById('cancel-project').addEventListener('click', closeModal);
       document.getElementById('confirm-project').addEventListener('click', confirmProject);

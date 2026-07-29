@@ -84,6 +84,20 @@
 - 重置 checkbox 状态（避免上次的勾选残留）
 - 用法：之前勾过"不再提醒"后想再看功能说明，点 ? 即可
 
+### 10. 清除数据 = 真正全清（不是只清日志）
+
+- **bug 修复**：之前"清除数据"只清 `state.logs`，保留项目定义，且 `dismissedIntro` 也不清（用户说"清完下次还弹欢迎页"不对，确实漏了 dismissedIntro）
+- **行为变更**：现在"清除数据" = 恢复到首次启动状态
+  - 清空 `state.projects` → 恢复 `DEFAULT_PROJECTS`（学习/运动/工作，3 个）
+  - 清空 `state.logs = {}`
+  - 重置 `state.dismissedIntro = false`（下次打开页面会重新弹欢迎页）
+  - 重置 `state.currentProjectId` 为第一个默认项目
+  - 保留视图设置：`fullscreen` / `maxCellSize` / `maxStripCols` / `calPanelWidth` / `viewMode` / `viewYear` / `viewMonth` —— 这些是用户偏好不是数据
+  - 重置 UI 状态：`_projectEditMode = false` + `_editMode = false`（避免清完数据还停在编辑模式）
+- confirm 提示信息强化：明确说"恢复默认 3 个项目"+"欢迎弹窗会重新显示"+"视图设置保留"
+- toast 反馈更具体：`已清除 N 个项目 + M 条日志，欢迎弹窗下次会重新显示`
+- 欢迎页"清除数据"section 描述同步更新
+
 ## v0.3.10 — 2026-07-29
 
 **数据导出/导入 (跨浏览器迁移 + 备份) + 数据结构优化**
