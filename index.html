@@ -109,8 +109,9 @@
     /* v0.3.5：hidden project 灰显 + 名字加删除线 */
     .project-item.hidden-project .name { color: var(--text-faint); text-decoration: line-through; }
     .project-item.hidden-project .dot { opacity: 0.35; }
-    /* v0.3.7：eye / del 按钮统一尺寸 22x22, 增大点击区, 防止误点 */
-    .project-item .eye, .project-item .del {
+    /* v0.3.7：eye / del 按钮统一尺寸 22x22, 增大点击区, 防止误点
+       v0.3.9：再加 edit 按钮 (项目编辑模式下显示) */
+    .project-item .eye, .project-item .del, .project-item .edit {
       width: 22px; height: 22px;
       padding: 0;
       display: flex;
@@ -169,6 +170,35 @@
     .project-item:hover .del { visibility: visible; }
     .project-item .del:hover { background: #fee2e2; color: #dc2626; }
 
+    /* v0.3.9：项目编辑模式 —— sidebar 进入"项目编辑"模式后,所有项目显示 edit + del 按钮,不再显示 eye
+       用 .project-list 上的 .edit-mode 类来切换,JS 在 renderProjects 里根据 state.projectEditMode 加 */
+    .project-list.edit-mode .project-item .edit,
+    .project-list.edit-mode .project-item .del { visibility: visible; }
+    .project-list.edit-mode .project-item .eye { display: none; }
+    /* v0.3.9：edit 按钮 —— 复用 eye/del 的样式,在编辑模式下显示 */
+    .project-item .edit {
+      visibility: hidden;
+      background: transparent;
+      border: 0;
+      cursor: pointer;
+      color: var(--text);
+      font-size: 13px;
+      margin-left: 2px;
+    }
+    .project-item .edit:hover { background: var(--hover); color: var(--text); }
+    /* v0.3.9：del 按钮 2 段删除 —— 第一次点击进入"armed"态,按钮变红、字变"删除";
+       第二次点击才真正执行删除,避免误删 */
+    .project-item .del.armed {
+      width: auto;
+      min-width: 22px;
+      padding: 0 5px;
+      background: #fee2e2;
+      color: #dc2626;
+      font-size: 11px;
+      font-weight: 500;
+      visibility: visible;
+    }
+
     .btn {
       width: 100%;
       padding: 8px 12px;
@@ -190,6 +220,14 @@
     .btn-primary:hover { background: #2563eb; border-color: #2563eb; color: #fff; }
     .btn-ghost { background: transparent; border: 1px solid var(--border); color: var(--text-soft); }
     .btn-ghost:hover { background: var(--hover); color: var(--text); }
+    /* v0.3.9：项目编辑模式下的"退出编辑"按钮 (危险态) */
+    .btn.btn-danger {
+      background: #dc2626;
+      color: #fff;
+      border: 1px solid #dc2626;
+      font-weight: 500;
+    }
+    .btn.btn-danger:hover { background: #b91c1c; border-color: #b91c1c; color: #fff; }
 
     /* ===== Calendar: header & view toggle ===== */
     .cal-header {
@@ -652,6 +690,8 @@
       <h2>项目</h2>
       <ul class="project-list" id="project-list"></ul>
       <button class="btn" id="add-project">+ 新建项目</button>
+      <!-- v0.3.9：项目编辑模式切换 (在 normal 是"编辑项目" / 灰边框,在 edit mode 是"退出编辑" / 红色) -->
+      <button class="btn" id="toggle-edit-projects" style="margin-top:8px;">编辑项目</button>
     </aside>
 
     <main class="panel">
@@ -726,7 +766,7 @@
 
   <div class="modal hidden" id="project-modal">
     <div class="modal-content">
-      <h3>新建项目</h3>
+      <h3 id="project-modal-title">新建项目</h3>
       <label>项目名称
         <input type="text" id="project-name" maxlength="20" placeholder="例如：学习、跑步">
       </label>
@@ -857,7 +897,9 @@
       fullscreen: true,
       // v0.3.4+：日历面板 mainW 滑条值（null = 自动用 cellUiW 公式）
       // 范围 7*maxCellSize*1.1 ~ appW*0.7，step 10
-      calPanelWidth: null
+      calPanelWidth: null,
+      // v0.3.9：项目编辑模式 —— sidebar 进入"项目编辑"模式,每个项目显示 edit + del 按钮(替代 eye)
+      projectEditMode: false
     };
 
     // v0.3.0-v0.3.3 旧版屏占比档位（仅 migration 用，把旧值映射到新全屏开关）
@@ -884,6 +926,8 @@
       state.projects.forEach(p => { if (p.visible === undefined) p.visible = true; });
       // v0.3.7：每个 project 加 kind 字段（默认 'hours' 工时类），老数据 migration
       state.projects.forEach(p => { if (p.kind === undefined) p.kind = 'hours'; });
+      // v0.3.9：项目编辑模式开关 (默认 false = 正常模式,只显示 eye 按钮)
+      if (typeof state.projectEditMode !== 'boolean') state.projectEditMode = false;
       if (!state.logs || typeof state.logs !== 'object') state.logs = {};
       const now = new Date();
       if (state.viewYear == null || state.viewYear < 1900) state.viewYear = now.getFullYear();
@@ -988,11 +1032,18 @@
     }
 
     // ========== Render: Sidebar ==========
+    // v0.3.9：项目编辑模式 —— state.projectEditMode=true 时,所有项目右侧只显示 edit + del 按钮(替代 eye)
+    //   - 进入: 点 sidebar 底部的"编辑项目"按钮(变成红色"退出编辑")
+    //   - 退出: 再点一次底部按钮,或点其它任何地方都不影响,只能再点底部按钮退出
+    //   - 平时 (projectEditMode=false): 每个项目只显示 eye (可见性切换)
     function renderProjects() {
       const list = document.getElementById('project-list');
       list.innerHTML = '';
+      // v0.3.9：edit-mode 类控制按钮显隐 (CSS 里有 .project-list.edit-mode .eye { display: none } 等)
+      list.classList.toggle('edit-mode', !!state.projectEditMode);
       if (state.projects.length === 0) {
         list.innerHTML = '<li style="color:var(--text-faint);font-size:12px;padding:8px 10px;">还没有项目</li>';
+        renderSidebarBottomButton();
         return;
       }
       state.projects.forEach(p => {
@@ -1000,48 +1051,89 @@
         const isActive = p.id === state.currentProjectId;
         const isHidden = p.visible === false;
         li.className = 'project-item' + (isActive ? ' active' : '') + (isHidden ? ' hidden-project' : '');
-        // v0.3.5：eye 按钮 —— 切换显隐。visible 时显示实心圆(睁开),hidden 时显示空心圆(关闭)
+        // v0.3.9：根据 projectEditMode 决定渲染哪些按钮
+        //   - normal: eye (显隐)
+        //   - edit mode: edit (编辑项目) + del (删除,2 段式)
+        let buttonsHtml;
+        if (state.projectEditMode) {
+          buttonsHtml = `
+            <button class="edit" data-id="${p.id}" title="编辑项目">✎</button>
+            <button class="del" data-id="${p.id}" title="删除项目 (再点一次确认)">×</button>
+          `;
+        } else {
+          buttonsHtml = `
+            <button class="eye" data-id="${p.id}" title="${isHidden ? '显示项目' : '隐藏项目'}">${isHidden ? '○' : '●'}</button>
+          `;
+        }
         li.innerHTML = `
           <span class="dot" style="background:${p.color}"></span>
           <span class="name">${escapeHtml(p.name)}</span>
-          <button class="eye" data-id="${p.id}" title="${isHidden ? '显示项目' : '隐藏项目'}">${isHidden ? '○' : '●'}</button>
-          <button class="del" data-id="${p.id}" title="删除项目">×</button>
+          ${buttonsHtml}
         `;
         li.addEventListener('click', (e) => {
-          // 眼睛 / 删除按钮不触发 active 切换
-          if (e.target.classList.contains('del') || e.target.classList.contains('eye')) return;
+          // 任何按钮 (eye/edit/del) 都不触发 active 切换
+          if (e.target.closest('button')) return;
           state.currentProjectId = p.id;
           saveState();
           renderAll();
         });
-        // v0.3.5：显隐切换 —— 不删数据,只是不在日历/统计中显示
-        // v0.3.7：bug 修复 — 用 !p.visible (当前状态) 而不是 !isHidden (闭包变量)
-        //   之前 isHidden 在 li 创建时捕获,反复点 eye 不会切换(永远是 !isHidden 的固定值)
-        li.querySelector('.eye').addEventListener('click', (e) => {
-          e.stopPropagation();
-          p.visible = !p.visible;
-          saveState();
-          renderAll();
-        });
-        li.querySelector('.del').addEventListener('click', (e) => {
-          e.stopPropagation();
-          const proj = getProject(p.id);
-          if (!proj) return;
-          const hasLogs = state.logs[p.id] && Object.keys(state.logs[p.id]).length > 0;
-          const msg = hasLogs
-            ? `删除项目「${proj.name}」及其所有记录？此操作无法撤销。`
-            : `删除项目「${proj.name}」？`;
-          if (!confirm(msg)) return;
-          delete state.logs[p.id];
-          state.projects = state.projects.filter(x => x.id !== p.id);
-          if (state.currentProjectId === p.id) {
-            state.currentProjectId = state.projects[0]?.id || null;
-          }
-          saveState();
-          renderAll();
-        });
+        if (state.projectEditMode) {
+          // v0.3.9：edit 按钮 —— 复用新建项目弹窗,预填当前名称/颜色/类型
+          li.querySelector('.edit').addEventListener('click', (e) => {
+            e.stopPropagation();
+            openModalForEdit(p.id);
+          });
+          // v0.3.9：del 按钮 2 段式删除 —— 第一次变红"删除",第二次才真删
+          //  - 不再弹 confirm() (之前每次都弹,体验割裂)
+          //  - 切换到其它项目 / 退出 edit mode / 重新渲染都会清掉 armed 状态
+          li.querySelector('.del').addEventListener('click', (e) => {
+            e.stopPropagation();
+            const btn = e.currentTarget;
+            if (btn.classList.contains('armed')) {
+              deleteProject(p.id);
+            } else {
+              btn.classList.add('armed');
+              btn.textContent = '删除';
+            }
+          });
+        } else {
+          // v0.3.5：eye 按钮 —— 切换显隐。visible 时显示实心圆(睁开),hidden 时显示空心圆(关闭)
+          // v0.3.7：bug 修复 — 用 !p.visible (当前状态) 而不是 !isHidden (闭包变量)
+          li.querySelector('.eye').addEventListener('click', (e) => {
+            e.stopPropagation();
+            p.visible = !p.visible;
+            saveState();
+            renderAll();
+          });
+        }
         list.appendChild(li);
       });
+      // v0.3.9：底部按钮文字/样式切换 (正常 "编辑项目" / edit mode 红色 "退出编辑")
+      renderSidebarBottomButton();
+    }
+    // v0.3.9：sidebar 底部"编辑项目"/"退出编辑"按钮的状态切换
+    function renderSidebarBottomButton() {
+      const btn = document.getElementById('toggle-edit-projects');
+      if (!btn) return;
+      if (state.projectEditMode) {
+        btn.textContent = '退出编辑';
+        btn.classList.add('btn-danger');
+      } else {
+        btn.textContent = '编辑项目';
+        btn.classList.remove('btn-danger');
+      }
+    }
+    // v0.3.9：删除项目 (从 .del click handler 抽出来,删除逻辑独立)
+    function deleteProject(id) {
+      const proj = getProject(id);
+      if (!proj) return;
+      delete state.logs[id];
+      state.projects = state.projects.filter(x => x.id !== id);
+      if (state.currentProjectId === id) {
+        state.currentProjectId = state.projects[0]?.id || null;
+      }
+      saveState();
+      renderAll();
     }
 
     // ========== Render: Header (label + view toggle + containers) ==========
@@ -1476,6 +1568,9 @@
     // v0.3.8：通用 toast —— 工时校验等一次性反馈
     // 同一个 toast 短时间连发时,取消上一轮的 timer,新消息会重新计时
     let _toastTimer = null;
+    // v0.3.9：项目 modal 当前模式 —— null = 新建,字符串 = 正在编辑该 id 的项目
+    // 不存 state(临时 UI 状态,刷新后回到默认)
+    let _editingProjectId = null;
     function showToast(msg, type) {
       const el = document.getElementById('toast');
       if (!el) return;
@@ -1581,12 +1676,14 @@
     }
 
     // ========== Color Picker ==========
-    function renderColorPicker() {
+    // selectedColor (v0.3.9)：可传入一个预选色,用于"编辑项目"时回填当前颜色
+    function renderColorPicker(selectedColor) {
       const picker = document.getElementById('color-picker');
       picker.innerHTML = '';
-      COLORS.forEach((c, i) => {
+      const sel = selectedColor || COLORS[0];
+      COLORS.forEach((c) => {
         const sw = document.createElement('button');
-        sw.className = 'swatch' + (i === 0 ? ' selected' : '');
+        sw.className = 'swatch' + (c === sel ? ' selected' : '');
         sw.style.background = c;
         sw.dataset.color = c;
         sw.type = 'button';
@@ -1658,16 +1755,42 @@
       updateNavTitles();
       renderAll();
     }
+    // v0.3.9：openModal 拆成两个 —— openModal (新建) + openModalForEdit (编辑,预填)
+    // 通过模块级 _editingProjectId 区分两种模式,confirmProject 里分支处理
     function openModal() {
+      _editingProjectId = null;
+      document.getElementById('project-modal-title').textContent = '新建项目';
       document.getElementById('project-name').value = '';
       renderColorPicker();
       // v0.3.7：重置 kind 选择到默认工时
       const hoursRadio = document.querySelector('input[name="project-kind"][value="hours"]');
       if (hoursRadio) hoursRadio.checked = true;
       document.getElementById('project-modal').classList.remove('hidden');
-      setTimeout(() => document.getElementById('project-name').focus(), 0);
+      setTimeout(() => {
+        const input = document.getElementById('project-name');
+        if (input) input.focus();
+      }, 0);
+    }
+    // v0.3.9：编辑模式 —— 复用同一个 modal,预填 name/color/kind,标题改"编辑项目"
+    function openModalForEdit(projectId) {
+      const proj = getProject(projectId);
+      if (!proj) return;
+      _editingProjectId = projectId;
+      document.getElementById('project-modal-title').textContent = '编辑项目';
+      document.getElementById('project-name').value = proj.name;
+      renderColorPicker(proj.color);
+      const kind = proj.kind || 'hours';
+      const kindRadio = document.querySelector(`input[name="project-kind"][value="${kind}"]`);
+      if (kindRadio) kindRadio.checked = true;
+      document.getElementById('project-modal').classList.remove('hidden');
+      setTimeout(() => {
+        const input = document.getElementById('project-name');
+        if (input) { input.focus(); input.select(); }
+      }, 0);
     }
     function closeModal() {
+      // v0.3.9：close 时清掉 _editingProjectId,避免下次 open 时误判
+      _editingProjectId = null;
       document.getElementById('project-modal').classList.add('hidden');
     }
 
@@ -1696,22 +1819,41 @@
       if (menu.classList.contains('hidden')) openSettingsMenu();
       else closeSettingsMenu();
     }
+    // v0.3.9：confirmProject 分支 —— _editingProjectId 设了 = 编辑模式(修改现有项目),否则 = 新建
     function confirmProject() {
       const name = document.getElementById('project-name').value.trim();
       if (!name) { alert('请输入项目名'); return; }
-      if (state.projects.some(p => p.name === name)) {
-        alert('已有同名项目，换一个？');
-        return;
-      }
-      // v0.3.7：读 kind 选择（默认 hours）
       const kindEl = document.querySelector('input[name="project-kind"]:checked');
       const kind = kindEl ? kindEl.value : 'hours';
-      const id = 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
-      state.projects.push({ id, name, color: getSelectedColor(), visible: true, kind });
-      state.currentProjectId = id;
-      saveState();
-      closeModal();
-      renderAll();
+      const color = getSelectedColor();
+      if (_editingProjectId) {
+        // 编辑模式：修改现有项目
+        const proj = getProject(_editingProjectId);
+        if (!proj) { closeModal(); return; }
+        // 名称唯一性检查 —— 排除自身
+        if (state.projects.some(p => p.id !== proj.id && p.name === name)) {
+          alert('已有同名项目，换一个？');
+          return;
+        }
+        proj.name = name;
+        proj.color = color;
+        proj.kind = kind;
+        saveState();
+        closeModal();
+        renderAll();
+      } else {
+        // 新建模式 (v0.3.7 之前的逻辑)
+        if (state.projects.some(p => p.name === name)) {
+          alert('已有同名项目，换一个？');
+          return;
+        }
+        const id = 'p_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+        state.projects.push({ id, name, color, visible: true, kind });
+        state.currentProjectId = id;
+        saveState();
+        closeModal();
+        renderAll();
+      }
     }
 
     // ========== Init ==========
@@ -1824,6 +1966,12 @@
       });
 
       document.getElementById('add-project').addEventListener('click', openModal);
+      // v0.3.9：项目编辑模式切换按钮 —— toggle state.projectEditMode + re-render sidebar
+      document.getElementById('toggle-edit-projects').addEventListener('click', () => {
+        state.projectEditMode = !state.projectEditMode;
+        saveState();
+        renderProjects();
+      });
       document.getElementById('cancel-project').addEventListener('click', closeModal);
       document.getElementById('confirm-project').addEventListener('click', confirmProject);
       document.getElementById('project-name').addEventListener('keydown', (e) => {

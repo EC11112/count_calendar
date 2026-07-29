@@ -1,5 +1,76 @@
 # Changelog
 
+## v0.3.9 — 2026-07-29
+
+**项目编辑模式 (sidebar "编辑项目" 按钮) + 删除 2 段确认 + 复用 modal 做编辑**
+
+之前每个项目同时挂着 eye (显隐) + del (删除) 两个按钮,del 又是 hover 才出现,删除时还要弹 confirm 框,操作割裂。这次重做项目侧栏的操作模型:
+
+---
+
+**1. 项目编辑模式 (state.projectEditMode)**
+
+- sidebar 底部新增"编辑项目"按钮 (与"新建项目"同 `.btn` 样式,虚线边框)
+- 平时 (projectEditMode=false): 每个项目右侧**只显示 eye 按钮** (显隐);不渲染 del,避免误删
+- 编辑模式 (projectEditMode=true): 每个项目右侧**显示 edit (✎) + del (×)**;eye 不再渲染
+- 进入/退出: 点击底部按钮 toggle,文字和颜色跟着变
+  - 平时: "编辑项目" (灰边框,跟新建项目同款)
+  - 编辑模式: "退出编辑" (红底白字 `.btn.btn-danger`)
+- 用 `.project-list.edit-mode` 类做 CSS 切换,JS 只 toggle 一个 class
+
+---
+
+**2. 编辑项目 —— 复用新建项目 modal**
+
+- 新增 `openModalForEdit(projectId)`: 预填 name / color / kind,标题改"编辑项目"
+- `confirmProject` 分支: `_editingProjectId` 设了 = 编辑模式 (改现有项目),否则 = 新建
+- 重名检查在编辑模式下要排除自身 (避免"我名字不变"也被判重)
+- modal 标题 (`#project-modal-title`) 改成 JS 动态设置
+- 关闭 modal 时清掉 `_editingProjectId` 状态,防止下次 open 时误判
+
+---
+
+**3. 删除 2 段确认 (替代 confirm 弹窗)**
+
+- 之前: 点 × → 弹 confirm 框 → 确认才删
+- 现在: 点 × (第一次) → 按钮变红、文字变 "删除";再点一次 (第二次) → 真正删除
+- 不再弹 confirm,操作连贯
+- "armed" 状态是 DOM 上的临时 class,任何 re-render (切换 active 项目 / 退出 edit mode / 其它修改) 都会清掉,不会卡死
+- 删除逻辑抽到 `deleteProject(id)`,独立函数
+
+---
+
+**新增 / 改动**:
+
+CSS:
+- `.btn.btn-danger` (红底白字)
+- `.project-item .edit` (新增按钮基础样式)
+- `.project-list.edit-mode .project-item .edit, .del { visibility: visible }`
+- `.project-list.edit-mode .project-item .eye { display: none }`
+- `.project-item .del.armed` (红底红字,宽度 auto 撑开"删除"两字)
+
+HTML:
+- sidebar 加 `<button class="btn" id="toggle-edit-projects">编辑项目</button>`
+- modal 标题 `<h3 id="project-modal-title">新建项目</h3>`
+
+JS:
+- `state.projectEditMode: false` (默认), migration 补默认值
+- 模块级 `let _editingProjectId = null` (临时 UI 状态,不入 state)
+- `renderProjects` 重构: 按 projectEditMode 决定渲染哪组按钮
+- `renderSidebarBottomButton()` 新增: 切换底部按钮文字/样式
+- `renderColorPicker(selectedColor)` 新增预选色参数
+- `openModal` / `closeModal` 更新: 标题动态化,close 时清 `_editingProjectId`
+- `openModalForEdit(id)` 新增
+- `confirmProject` 分支: create vs edit
+- `deleteProject(id)` 抽出来
+
+行为变化 (用户能感知):
+- 项目右侧按钮从 2 个 (eye + del) 变成"平时只 eye / 编辑模式 edit+del"
+- 删除流程从"点 × → confirm 弹窗"变成"点 × → 变红"删除" → 再点一次"
+- 新增编辑项目入口,跟新建走同一个 modal,标题切换
+
+---
+
 ## v0.3.8 — 2026-07-28
 
 **工时类项目日合计上限校验 (≤ 1.0 天)**
