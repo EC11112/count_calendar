@@ -82,6 +82,13 @@
       border-bottom: 1px solid var(--border);
     }
     .stats-actions .header-icon-btn { width: 28px; height: 28px; font-size: 14px; }
+    /* v0.3.12：icon 统一黑白线性格式 —— 强制所有按钮 icon 走文本字体
+       不让浏览器把 ⚙ 等字符按 emoji 渲染成彩色 (Chrome 116+ 支持 font-variant-emoji: text)
+       旧浏览器 / 不支持时,因为按钮里的 icon 字符都是黑白 BMP 字符,自然就是黑白的 */
+    .stats-actions .header-icon-btn, .sidebar-bottom .btn-icon {
+      font-variant-emoji: text;
+      text-presentation: isolate;
+    }
 
     /* ===== Sidebar ===== */
     .sidebar { display: flex; flex-direction: column; }
@@ -840,7 +847,7 @@
            - 三色区分: 白色=中性默认, 蓝色=当前态/主操作, 红色=危险操作 -->
       <div class="sidebar-bottom">
         <button class="btn" id="add-project"><span class="btn-icon">+</span><span>新建项目</span></button>
-        <button class="btn btn-danger" id="clear-data" style="display:none;"><span class="btn-icon">🗑</span><span>清除数据</span></button>
+        <button class="btn btn-danger" id="clear-data" style="display:none;"><span class="btn-icon">×</span><span>清除数据</span></button>
         <button class="btn" id="toggle-edit-projects"><span class="btn-icon">✎</span><span>编辑项目</span></button>
       </div>
     </aside>
@@ -916,7 +923,7 @@
       <div class="stats-actions">
         <button id="edit-toggle" class="header-icon-btn" title="编辑模式（刷新自动关闭）：关时点击日历不会修改记录，开时点击切换 active 项目在该日期的状态（工时类 0→半天→整天，非工时类 0→√）" aria-label="编辑模式">✎</button>
         <button id="help-btn" class="header-icon-btn" title="帮助：重新打开功能介绍弹窗" aria-label="帮助">?</button>
-        <button id="install-btn" class="header-icon-btn" title="下载 / 部署为本地应用（浏览器支持 PWA 时优先弹安装提示）" aria-label="下载/部署">📥</button>
+        <button id="install-btn" class="header-icon-btn" title="下载 / 部署为本地应用（浏览器支持 PWA 时优先弹安装提示）" aria-label="下载/部署">↓</button>
         <button id="settings-btn" class="header-icon-btn" title="设置" aria-label="设置">⚙</button>
       </div>
       <h2 id="stats-title">统计</h2>
@@ -1009,7 +1016,7 @@
     //   - appVersion: 跟着代码走 (const),导出时写入,用来跟用户沟通时定位版本
     //   - schemaVersion: 数据结构版本,导入时校验,未来加字段时升 v2 并写 migration
     // 关系: 一次代码部署对应一个 APP_VERSION;同一个 APP_VERSION 下 schema 多次升级也是可能的
-    const APP_VERSION = '0.3.11';
+    const APP_VERSION = '0.3.12';
     const SCHEMA_VERSION = 1;
     const HOURS_PER_DAY = 8;
     const COLORS = [
