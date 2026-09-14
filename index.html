@@ -1202,7 +1202,7 @@
     //   - appVersion: 跟着代码走 (const),导出时写入,用来跟用户沟通时定位版本
     //   - schemaVersion: 数据结构版本,导入时校验,未来加字段时升 v2 并写 migration
     // 关系: 一次代码部署对应一个 APP_VERSION;同一个 APP_VERSION 下 schema 多次升级也是可能的
-    const APP_VERSION = '0.3.16';
+    const APP_VERSION = '0.3.17';
     const SCHEMA_VERSION = 1;
     const HOURS_PER_DAY = 8;
     const COLORS = [
@@ -1938,6 +1938,9 @@
       // v0.3.8：工时类项目校验"日合计 <= 1.0 天" —— 你不可能一天给 3 个项目干 0.5 天
       //   半天 = 0.5, 整天 = 1.0; 若 next 应用后跨项目合计 > 1.0 则阻止并 toast
       // v0.3.11：读 _editMode (模块级),刷新自动关闭编辑态,防止误记录
+      // v0.3.17 修复：特殊场景——当前项目=半天,其他项目合计=0.5(当日合计=1.0 已满),
+      //   用户点想加整天被撞墙 → 改为直接清掉当前半天 (视为"占满了,默认取消当前项目占的半天")
+      //   这是更友好的行为: 让用户能继续操作而不是死锁
       const activeProj = getProject(state.currentProjectId);
       if (_editMode && activeProj && ds <= todayKey) {
         cell.addEventListener('click', () => {
@@ -1949,6 +1952,15 @@
             const newValue = (next === 1) ? 0.5 : 1.0;
             const otherTotal = getDayHoursTotal(ds, activeProj.id);
             if (otherTotal + newValue > 1.0) {
+              // v0.3.17 特殊场景: 当前是半天(0.5),想点整天(1.0),其他合计=0.5(已占满)
+              //   → 视为占满,直接清掉当前半天(把"想加整天"解读为"取消我占的半天")
+              if (cur === 1 && next === 2 && otherTotal === 0.5) {
+                setClicks(activeProj.id, ds, 0);
+                showToast('当前项目已取消半天 (其他项目已占满一天)', 'tip');
+                renderCalendar();
+                renderStats();
+                return;
+              }
               const used = otherTotal + (cur === 1 ? 0.5 : (cur === 2 ? 1.0 : 0));
               showToast(
                 `当天工时类项目已占 ${formatHoursDecimal(used)} 天 (含当前项目),无法再添${next === 1 ? '半天' : '整天'}`,
