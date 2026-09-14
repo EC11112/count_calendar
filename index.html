@@ -1956,7 +1956,8 @@
               //   → 视为占满,直接清掉当前半天(把"想加整天"解读为"取消我占的半天")
               if (cur === 1 && next === 2 && otherTotal === 0.5) {
                 setClicks(activeProj.id, ds, 0);
-                showToast('当前项目已取消半天 (其他项目已占满一天)', 'tip');
+                // 暂时不加 toast 提示 (用户反馈"加个 toast 反而打扰",先注释,后续按需打开)
+                // showToast('当前项目已取消半天 (其他项目已占满一天)', 'tip');
                 renderCalendar();
                 renderStats();
                 return;
