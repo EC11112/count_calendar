@@ -611,7 +611,7 @@
       bottom: 4px;
       z-index: 2;
       line-height: 1.1;
-      font-size: 10px;  /* fallback，JS 动态算 */
+      font-size: 20px;  /* fallback，JS 动态算 (徽章字号 × 2) */
       opacity: 0.8;
       pointer-events: none;
     }
@@ -1217,7 +1217,7 @@
     //   - appVersion: 跟着代码走 (const),导出时写入,用来跟用户沟通时定位版本
     //   - schemaVersion: 数据结构版本,导入时校验,未来加字段时升 v2 并写 migration
     // 关系: 一次代码部署对应一个 APP_VERSION;同一个 APP_VERSION 下 schema 多次升级也是可能的
-    const APP_VERSION = '0.3.18';
+    const APP_VERSION = '0.3.19';
     const SCHEMA_VERSION = 1;
     const HOURS_PER_DAY = 8;
     const COLORS = [
@@ -1952,11 +1952,12 @@
       // v0.3.18：季/年视图每月 1 日格子左下角显示中文月份名（一/二/…/十一/十二）
       // - 格子不够大(不显示"半/整"徽章, cellSize < 56): 月份名占徽章原位 (bottom: 4px)
       // - 格子够大: 月份名抬到徽章上方 (跟徽章同字号,统一用 badgeFont 缩放)
+      // v0.3.19：月份名字体放大 200%（badgeFont × 2），小格下月份名更醒目
       if (monthTag && d === 1) {
         const monthEl = document.createElement('span');
         monthEl.className = 'cal-cell-month';
         monthEl.textContent = MONTH_CN_NAMES[m];
-        monthEl.style.fontSize = `${badgeFont}px`;
+        monthEl.style.fontSize = `${badgeFont * 2}px`;
         if (useBadge) {
           // 徽章高 ≈ badgeFont*1.1 (line-height) + 2px (上下 padding),再留 2px 间距
           monthEl.style.bottom = `${4 + Math.ceil(badgeFont * 1.1) + 2 + 2}px`;
