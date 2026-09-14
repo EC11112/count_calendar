@@ -602,6 +602,21 @@
       line-height: 1.1;
     }
     .cal-cell.logged[data-clicks="2"] .cal-cell-badge { background: rgba(255,255,255,0.45); }
+    /* v0.3.18：季/年视图每月 1 日格子的中文月份标签（左下角）
+       - 格子不够大(不显示"半/整"徽章)时:占徽章原位 (bottom: 4px)
+       - 格子够大时: JS 把 bottom 抬到徽章上方 */
+    .cal-cell-month {
+      position: absolute;
+      left: 4px;
+      bottom: 4px;
+      z-index: 2;
+      line-height: 1.1;
+      font-size: 10px;  /* fallback，JS 动态算 */
+      opacity: 0.8;
+      pointer-events: none;
+    }
+    /* 未记录格子上月份标签用淡色,跟日期数字一致 */
+    .cal-cell:not(.logged) .cal-cell-month { color: var(--text-soft); }
 
     /* v0.3.4+：旧 .strip-wrap / .weekday-row / .day-strip / .strip-day / .strip-day-num / .strip-day-badge 全部删除
        改用上面的统一 .cal-grid + .cal-cell + .cal-cell-num + .cal-cell-badge 组件
@@ -1202,7 +1217,7 @@
     //   - appVersion: 跟着代码走 (const),导出时写入,用来跟用户沟通时定位版本
     //   - schemaVersion: 数据结构版本,导入时校验,未来加字段时升 v2 并写 migration
     // 关系: 一次代码部署对应一个 APP_VERSION;同一个 APP_VERSION 下 schema 多次升级也是可能的
-    const APP_VERSION = '0.3.17';
+    const APP_VERSION = '0.3.18';
     const SCHEMA_VERSION = 1;
     const HOURS_PER_DAY = 8;
     const COLORS = [
@@ -1217,6 +1232,8 @@
     const VIEW_STEP  = { month: 1, quarter: 3, year: 12 };
     const VIEW_COUNT = { month: 1, quarter: 3, year: 12 };
     const WEEKDAY_NAMES = ['日', '一', '二', '三', '四', '五', '六'];
+    // v0.3.18：季/年视图每月 1 日格子里显示的中文月份名
+    const MONTH_CN_NAMES = ['一', '二', '三', '四', '五', '六', '七', '八', '九', '十', '十一', '十二'];
 
     // ========== Strip layout (季/年视图自适应) ==========
     // 原则：
@@ -1844,7 +1861,9 @@
 
       // v0.3.5：cellData.forEach 用 todayKey 传就行,proj 不再传,buildCalCell 内部用 getVisibleProjects()
       const _ = proj;  // 保留参数兼容性,实际不用
-      cellData.forEach(c => daysEl.appendChild(buildCalCell(c, todayKey, { useBadge, badgeFont })));
+      // v0.3.18：季/年视图每月 1 日格子显示中文月份名 (月视图不需要)
+      const monthTag = state.viewMode !== 'month';
+      cellData.forEach(c => daysEl.appendChild(buildCalCell(c, todayKey, { useBadge, badgeFont, monthTag })));
     }
 
     // v0.3.5：buildCalCell 重写为多项目版本
@@ -1853,7 +1872,7 @@
     // - 数字 z-index 高于色条 + text-shadow,彩色背景上可读
     // - 单击仍然只 toggle active project 的 log(简单点,复杂的多项目编辑后面再说)
     function buildCalCell(cellData, todayKey, opts) {
-      const { useBadge, badgeFont } = opts || {};
+      const { useBadge, badgeFont, monthTag } = opts || {};
       const cell = document.createElement('div');
       cell.className = 'cal-cell';
       if (cellData.blank) {
@@ -1928,6 +1947,21 @@
           badge.style.fontSize = `${badgeFont}px`;
           cell.appendChild(badge);
         }
+      }
+
+      // v0.3.18：季/年视图每月 1 日格子左下角显示中文月份名（一/二/…/十一/十二）
+      // - 格子不够大(不显示"半/整"徽章, cellSize < 56): 月份名占徽章原位 (bottom: 4px)
+      // - 格子够大: 月份名抬到徽章上方 (跟徽章同字号,统一用 badgeFont 缩放)
+      if (monthTag && d === 1) {
+        const monthEl = document.createElement('span');
+        monthEl.className = 'cal-cell-month';
+        monthEl.textContent = MONTH_CN_NAMES[m];
+        monthEl.style.fontSize = `${badgeFont}px`;
+        if (useBadge) {
+          // 徽章高 ≈ badgeFont*1.1 (line-height) + 2px (上下 padding),再留 2px 间距
+          monthEl.style.bottom = `${4 + Math.ceil(badgeFont * 1.1) + 2 + 2}px`;
+        }
+        cell.appendChild(monthEl);
       }
 
       // 单击仍然只 toggle active project 的 log(简单点)

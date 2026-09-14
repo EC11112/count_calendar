@@ -1,5 +1,34 @@
 # Changelog
 
+## v0.3.18 — 2026-09-14
+
+**季/年视图：每月 1 日格子左下角显示中文月份名**
+
+### 1. 需求
+
+- 季度和年度视图中,每个"x 月 1 日"的格子里,左下角写一个中文月份:一、二、…、十一、十二
+- 格子足够大(会显示"半"/"整"徽章,即 cellSize ≥ 56)时:月份名显示在徽章**上方**
+- 不显示徽章时:月份名占徽章原位置 (左下角 left: 4px / bottom: 4px)
+
+### 2. 实现
+
+- 新增常量 `MONTH_CN_NAMES = ['一',…,'十二']`（`index.html`）
+- `renderCalendarView` 计算 `monthTag = state.viewMode !== 'month'`，随 opts 传入 `buildCalCell`（月视图不显示）
+- `buildCalCell` 中 `monthTag && d === 1` 的格子追加 `.cal-cell-month` span:
+  - 字号跟徽章同一公式 `calcBadgeFontSize`（cap 8-10），随格子缩放
+  - `useBadge === false`：CSS 默认 `bottom: 4px`（= 徽章原位）
+  - `useBadge === true`：JS 把 bottom 抬到 `4 + ceil(badgeFont*1.1) + 2 + 2` px（徽章高 + 2px 间距），正好悬在徽章上方不重叠
+- 样式：`.cal-cell-month` 绝对定位左下、`pointer-events: none`（不挡点击）、`opacity: 0.8`；未记录格子用 `--text-soft` 淡色，已记录格子继承白色
+
+### 3. 验证（浏览器实测）
+
+- 季视图 50px 小格（无徽章）：7/1、8/1、9/1 格子分别显示 七/八/九，位于左下角徽章位 ✓
+- 季视图 97px 大格（有"整"徽章）：三个 1 日格子月份名均在，徽章正常显示，月份名按公式抬到徽章上方 ✓
+- 年视图：1/1 显示"一"、11/1 显示"十一" ✓
+- 月视图：无月份标签（零匹配确认）✓
+
+### 4. APP_VERSION 0.3.17 → 0.3.18
+
 ## v0.3.17 — 2026-09-14
 
 **修 bug：工时类"日合计占满 1 天"时撞墙导致死锁**
